@@ -1,0 +1,30 @@
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+
+public class NameUi : MonoBehaviour
+{
+    public GameObject nameUi;
+    private Vector3 currentPosition = new Vector3();
+    private Vector3 optionPosition = new Vector3();
+    public void Start()
+    {
+    }
+    public GameObject SetName() {
+        GameObject child = nameUi.transform.GetChild(0).gameObject;
+        return child;
+    }
+    public void SetOptionPosition() {
+        optionPosition.x = 114.1424f + 105f;
+        optionPosition.y = 23.00002f + 283f;
+        optionPosition.z = 0f;
+        nameUi.transform.position = optionPosition;
+    }
+    public void SetDialoguePosition() {
+        optionPosition = transform.position;
+        currentPosition.x = 114.1424f + 115f;
+        currentPosition.y = 23.00002f + 178f;
+        currentPosition.z = 0f;
+        nameUi.transform.position = currentPosition;
+    }
+}
