@@ -1,0 +1,49 @@
+using System;
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+
+[Serializable]
+public class Dialogue
+{
+    public int id;
+    public string name;
+    public string sentence;
+    public bool hidden;
+    public bool endSentence;
+    public bool isOptions;
+    public bool isUsed;
+    public List<ConvoOption> optionList;
+    public int nextDialogueId;
+    public CommunicationManager.emotion emote;
+
+    public Dialogue(int id, string name, string sentence, bool isOptions, bool endSentence, bool isUsed, bool hidden) {
+        this.emote = CommunicationManager.emotion.DEFAULT;
+        this.id = id;
+        this.name = name;
+        this.sentence = sentence;
+        this.hidden = hidden;
+        this.endSentence = endSentence;
+        this.isUsed = isUsed;
+        this.isOptions = isOptions;
+        if (isOptions) {
+            optionList = new List<ConvoOption>();
+        }
+        this.nextDialogueId = -1;
+    }
+    public void AddOption(string sentence) {
+        optionList.Add(new ConvoOption(sentence));
+    }
+    public void SetNextIdOfOption(int index, int nextID) {
+        optionList[index].nextID = nextID;
+    }
+    public void SetHiddenOption(int index, bool hidden) {
+        optionList[index].hidden = hidden;
+    }
+    public void SetIsOver(int option, bool state) { 
+        optionList[option].isOverConvo = state;
+    }
+    public ConvoOption GetOption(int index) {
+        return optionList[index];
+    }
+}
