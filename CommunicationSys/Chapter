@@ -1,0 +1,51 @@
+using System;
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+
+[Serializable]
+public class Chapter 
+{
+    public List<Conversation> convoList = new List<Conversation>();
+    public int currentChapterId;
+    public int convoId = 0;
+
+    public Chapter(List<Conversation> convoList, int currentChapterId)
+    {
+        this.currentChapterId = currentChapterId;
+        this.convoList = convoList;
+        convoId = 0;
+    }
+    public void SetConvoId(int index) {
+        convoId = index;
+    }
+    public Conversation GiveNextConvo() {
+        if (convoId < convoList.Count) {
+            return convoList[convoId];
+        }
+        return null;
+    }
+    public Conversation GetNextConvo(string name) {
+        for (int i = 0; i < convoList.Count; i++)
+        {
+            if (convoList[i].personName.Equals(name) && !convoList[i].isUsed)
+            {
+                return convoList[i];
+            }
+        }
+        return convoList[convoList.Count-1];
+    }
+    public int GetConvoIndex(Conversation com) {
+        for (int i = 0;i<convoList.Count;i++) {
+            if (convoList[i].currentId == com.currentId) {
+                return i;
+            }
+            
+        }
+        return -1;
+    }
+    public Conversation GetConvo(int index)
+    {
+        return convoList[index];
+    }
+}
