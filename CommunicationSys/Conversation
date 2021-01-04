@@ -1,0 +1,159 @@
+using System;
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+
+[Serializable]
+public class Conversation
+{
+    public static int id = 0;
+    public int currentId;
+    public int dialogueCountId = 0;
+    public int nextDialogueId;
+    public List<Dialogue> dialogueList;
+    public Dialogue currentDialogue;
+    public List<ConvoOption> currentOptions;
+    public string personName;
+    public bool isUsed;
+    private Dialogue previousDialogue;
+
+    public Conversation(string personName)
+    {
+        this.currentId = id;
+        this.personName = personName;
+        this.dialogueList = new List<Dialogue>();
+        this.isUsed = false;
+        
+        id = IncreaseId();
+    }
+    public void StartSetUp() {
+        if (dialogueList[0] != null)
+        {
+            SetCurrentDialogue(0);
+        }
+        else
+        {
+            Debug.Log("There is no dialogue in this sentence");
+        }
+    }
+    //This Id is for the conversation itself
+    private int IncreaseId() {
+        return id+=1;
+    }
+    // This method is called when adding dialogue to the conversation
+    public void AddNewDialogue(string name, string sentence, bool isOptions, bool endSentence, bool isUsed, bool hidden) {
+        dialogueList.Add(new Dialogue(dialogueCountId , name, sentence, isOptions, endSentence, isUsed, hidden));
+        dialogueCountId++;
+    }
+    
+    public string GetDialogueName() {
+        return currentDialogue.name;
+    }
+    public string GetDialogueText() {
+        return currentDialogue.sentence;
+    }
+    
+    // This is used only for options. To set next sentence.
+    public void SetNextIdDialogueForConvo() {
+        nextDialogueId = currentDialogue.nextDialogueId;
+        previousDialogue = currentDialogue;
+    }
+    public void SetCurrentDialogue(int index) {
+        // Check for if there is a nextId that isn't -1 if so then set that one
+        if (index < dialogueList.Count) {
+            currentDialogue = dialogueList[index];
+            currentOptions = currentDialogue.optionList;
+            if (currentDialogue.nextDialogueId == -1) {
+                nextDialogueId = index + 1;
+            } else {
+                SetNextIdDialogueForConvo();
+            }
+        }
+    }
+    public void SetDialogueNextId(int dialogueIndex, int nextId) {
+        dialogueList[dialogueIndex].nextDialogueId = nextId;
+    }
+    public void SetUsedDialogue(int dialogueIndex, bool isUsed) {
+        dialogueList[dialogueIndex].isUsed = isUsed;
+    }
+    public void SetDialogueHidden(int dialogueIndex, bool hid) {
+        dialogueList[dialogueIndex].hidden = hid;
+    }
+    
+    public void RestartConvo(int index) {
+        currentDialogue = dialogueList[index];
+        nextDialogueId = index;
+    }
+    public bool IsMoreDialogue(int count) {
+        if (count > dialogueList.Count) {
+            return false;
+        }
+        return true;
+    }
+    public void SetDialogueEmotion(int index, CommunicationManager.emotion emote) {
+        dialogueList[index].emote = emote;
+    }
+    public CommunicationManager.emotion GetEmote() {
+        return currentDialogue.emote;
+    }
+    //This method is used to get the next Dialogue depending on the option chosen
+    public void SetOptionDialogue(int choice)
+    {
+        currentDialogue.nextDialogueId = currentOptions[choice].nextID;
+    }
+    public List<ConvoOption> GetDialogueOptionList()
+    {
+        return currentDialogue.optionList;
+    }
+    public void SetOptionToHidden(int index, int optionIndex, bool hidden)
+    {
+        dialogueList[index].SetHiddenOption(optionIndex, hidden);
+    }
+    public void AddOption(int index, string sentence)
+    {
+        if (index < dialogueList.Count)
+        {
+            dialogueList[index].AddOption(sentence);
+        }
+    }
+    public void SetNextIdInOption(int index, int optionIndex, int nextIndex)
+    {
+        dialogueList[index].GetOption(optionIndex).nextID = nextIndex;
+    }
+
+    public bool isOver() {
+        if (currentDialogue.nextDialogueId == -1) {
+            return true;
+        }
+        else {
+            return false;
+        }
+    }
+
+    public bool hasStarted() {
+        if (GetDialogueIndex(currentDialogue) == 0)
+        {
+            return true;
+        }
+        else
+        {
+            return false;
+        }
+    }
+
+    public int GetDialogueIndex(Dialogue dia)
+    {
+        for (int i = 0; i < dialogueList.Count;i++) {
+            if (dialogueList[i].sentence.Equals(dia.sentence) && dialogueList[i].name.Equals(dia.name) && dialogueList[i].nextDialogueId.Equals(dia.nextDialogueId)) {
+                return i;
+            }
+        }
+        return -1;
+    }
+    public void SetOptionForConvoOver(int dialogue, int option, bool isOver) {
+        dialogueList[dialogue].SetIsOver(option, isOver);
+    }
+    public bool GiveOverOptionState(int dialogue, int option) {
+        return dialogueList[dialogue].optionList[option].isOverConvo;
+    }
+}
