@@ -1,0 +1,1519 @@
+using System.IO;
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+using UnityEngine.UI;
+using UnityEngine.AI;
+using System.Data;
+
+public class CommunicationManager : MonoBehaviour {
+    public Camera cam;
+    public GameObject manager;
+    public GameObject communicationWindow;
+    public GameObject spriteUi;
+    public GameObject otherSpriteUi;
+    public GameObject optionSpriteUi;
+    public GameObject convoUi;
+    public GameObject otherConvoUi;
+    public GameObject optionsUi;
+    public GameObject optionUi_4;
+    public GameObject optionUi_2;
+    public GameObject nameUi;
+    public GameObject otherNameUi;
+
+    public GameObject player;
+    public GameObject otherCanvis;
+    public GameObject typeCanvas;
+    public GameObject someCanvas;
+    public GameObject pauzeBtn;
+
+    public AllCharactorSprites allCharacters;
+    public ScenarioHandler jsonFileManager;
+    public SavedScenarioProgress saveProgress;
+    public enum emotion { DEFAULT, HAPPY, SAD, WORRIED, AFFRAID, MAD, ANXIOUS, CONFUSSED, SHOCKED, THINKING }
+
+    public Chapter chapter;
+    public Conversation currentConvo;
+
+    public float typingSpeed;
+    public string personName = "Default";
+    public string playerName = "Ms. Nurse";
+    private string nurseLotte = "Nurse Lotte";
+    private string patientB = "Betül Yildiz";
+    private string patientAPeter = "Peter Pluijmen";
+    private bool endConvo;
+    private bool isSentanceFinished;
+    private string _JasonFilePath;
+    private string _nlJasonFilePath;
+    private string clearText = "";
+
+    private void Awake() {
+        //This is the path used to get to the json file for the chapter data
+        //_nlJasonFilePath = Application.streamingAssetsPath + "/Data/ConversationData/NlChapter1v2File.json";
+        //_JasonFilePath = Application.streamingAssetsPath + "/Data/ConversationData/EngChapter1v2File.json";
+       _JasonFilePath = Application.streamingAssetsPath + jsonFileManager.currentChapter;
+        
+        chapter = LoadConvo(_JasonFilePath);
+    }
+    //Start is called before the first frame update
+    void Start() {
+
+        //SaveToJasonFile(CreateNlChapterData(), _nlJasonFilePath);
+        //SaveToJasonFile(CreateEngChapterData(), _JasonFilePath);
+        //chapter = CreateEngChapterData();
+        //chapter = CreateNlChapterData();
+        endConvo = false;
+        isSentanceFinished = true;
+        manager.GetComponent<HandleChapter1>().SetChaperCopy();
+        manager.GetComponent<HandleChapter1>().SetComCopy();
+    }
+    //Update is called once per frame
+    void Update() {
+        if (currentConvo != null && Input.GetMouseButtonDown(0) && communicationWindow.activeSelf) {
+            if (isSentanceFinished) {
+                endConvo = currentConvo.currentDialogue.endSentence;
+                if (endConvo) {
+                    if (!currentConvo.isOver())
+                    {
+                        currentConvo.isUsed = false;
+                    } else {
+                        currentConvo.isUsed = true;
+                    }
+                    ClearConversation();
+                    OnShowConversation();
+                    if (manager != null) {
+                        manager.GetComponent<HandleChapter1>().Chapter1Over();
+                        manager.GetComponent<HandleChapter1>().PeterExplainedIssue();
+                    }
+                }
+                if (!currentConvo.currentDialogue.isOptions) {
+                    if (currentConvo.IsMoreDialogue(currentConvo.nextDialogueId)) {
+                        currentConvo.SetCurrentDialogue(currentConvo.nextDialogueId);
+                    }
+                }
+                ClearConversation();
+                StopAllCoroutines();
+                DisplayNext();
+            } else {
+                if (convoUi.activeSelf) {
+                    StopAllCoroutines();
+                    ClearConversation();
+                    FastText(convoUi);
+                } else if (otherConvoUi.activeSelf) {
+                    StopAllCoroutines();
+                    ClearConversation();
+                    FastText(otherConvoUi);
+                }
+            }
+        }
+    }
+    //This is the method called when a conversation needs to be displayed and the rest of the game is effectively paused
+    public void OnShowConversation() {
+
+        SetSenarioConvo(personName);
+
+        if (currentConvo != null)
+        {
+            //These object scrips need to be disabled so that the conversation system works
+            player.GetComponent<NavMeshAgent>().enabled = !player.GetComponent<NavMeshAgent>().enabled;
+            player.GetComponent<PlayerController>().enabled = !player.GetComponent<PlayerController>().enabled;
+
+            StopAllCoroutines();
+
+            communicationWindow.SetActive(!communicationWindow.activeSelf);
+            otherCanvis.SetActive(!otherCanvis.activeSelf);
+            if (pauzeBtn != null) {
+                pauzeBtn.SetActive(!pauzeBtn.activeSelf);
+            }
+
+            if (communicationWindow.activeSelf) {
+                typeCanvas.SetActive(false);
+                someCanvas.SetActive(false);
+                //Do NOT remove, if so then if the dialogue begins with options then it will have an extra blank option
+                manager.GetComponent<HandleChapter1>().SetChaperCopy();
+                manager.GetComponent<HandleChapter1>().SetComCopy();
+                checkInChapter1();
+                ClearConversation();
+                DisplayNext();
+            }
+        }
+    }
+    //This method sets the name and text ui of the nurse
+    public IEnumerator DisplayNextDialogue(string text, GameObject convo) {
+        isSentanceFinished = false;
+        GameObject textUi = convo.GetComponent<ConvoUI>().GetChildText(0, 0);
+        textUi.GetComponent<Text>().text = clearText;
+
+        foreach (char letter in text.ToCharArray())
+        {
+            textUi.GetComponent<Text>().text += letter;
+            yield return new WaitForSeconds(typingSpeed);
+        }
+        isSentanceFinished = true;
+        convo.GetComponent<ConvoUI>().EnableFinishSymbol();
+    }
+    //This method displays the current dialogue
+    public void DisplayNext() {
+        if (currentConvo != null) {
+            CheckForOptions();
+            SetCurrentSprite();
+            if (convoUi.activeSelf) {
+                StartCoroutine(DisplayNextDialogue(currentConvo.GetDialogueText(), convoUi));
+
+            } else if (optionsUi.activeSelf) {
+                DisplayOptions(GiveStringOptionList(currentConvo.GetDialogueOptionList()), currentConvo.GetDialogueOptionList());
+                HidHiddenOptions(currentConvo.GetDialogueOptionList());
+
+            } else if (optionUi_2.activeSelf) {
+                DisplayOptions(GiveStringOptionList(currentConvo.GetDialogueOptionList()), currentConvo.GetDialogueOptionList());
+                HidHiddenOptions(currentConvo.GetDialogueOptionList());
+            } else if (optionUi_4.activeSelf) {
+                DisplayOptions(GiveStringOptionList(currentConvo.GetDialogueOptionList()), currentConvo.GetDialogueOptionList());
+                HidHiddenOptions(currentConvo.GetDialogueOptionList());
+
+            } else if (otherConvoUi.activeSelf) {
+                SetTextBoxSprite(currentConvo.GetDialogueName(), otherConvoUi);
+                StartCoroutine(DisplayNextDialogue(currentConvo.GetDialogueText(), otherConvoUi));
+            }
+        }
+    }
+    public void SetTextBoxSprite(string name, GameObject box) {
+        Sprite tempBox = allCharacters.GetTextBoxSprite(name);
+        if (tempBox != null) {
+            box.GetComponent<ConvoUI>().GetChild().GetComponent<Image>().sprite = tempBox;
+        }
+    }
+    public void FastText(GameObject convo) {
+        GameObject textUi = convo.GetComponent<ConvoUI>().GetChildText(0, 0);
+        textUi.GetComponent<Text>().text = currentConvo.GetDialogueText();
+        isSentanceFinished = true;
+        convo.GetComponent<ConvoUI>().EnableFinishSymbol();
+    }
+    //Here you need to say what happens when the option button gets pressed
+    public void HandleOptions(GameObject gameObject) {
+        switch (gameObject.tag) {
+            case "option_1":
+                currentConvo.SetOptionDialogue(0);
+                manager.GetComponent<HandleChapter1>().HandleChapterHiddenOption(0, currentConvo.currentDialogue);
+                break;
+            case "option_2":
+                currentConvo.SetOptionDialogue(1);
+
+                manager.GetComponent<HandleChapter1>().HandleChapterHiddenOption(1, currentConvo.currentDialogue);
+                break;
+            case "option_3":
+                currentConvo.SetOptionDialogue(2);
+                manager.GetComponent<HandleChapter1>().HandleChapterHiddenOption(2, currentConvo.currentDialogue);
+                break;
+            case "option_4":
+                currentConvo.SetOptionDialogue(3);
+                manager.GetComponent<HandleChapter1>().HandleChapterHiddenOption(3, currentConvo.currentDialogue);
+                break;
+            case "option_5":
+                currentConvo.SetOptionDialogue(4);
+                manager.GetComponent<HandleChapter1>().HandleChapterHiddenOption(4, currentConvo.currentDialogue);
+                break;
+            case "option_6":
+                currentConvo.SetOptionDialogue(5);
+                manager.GetComponent<HandleChapter1>().HandleChapterHiddenOption(5, currentConvo.currentDialogue);
+                break;
+        }
+        currentConvo.SetCurrentDialogue(currentConvo.currentDialogue.nextDialogueId);
+        ClearConversation();
+        StopAllCoroutines();
+        DisplayNext();
+    }
+
+    //This method sets the texts of the availible options ui
+    public void DisplayOptions(List<string> optionsList, List<ConvoOption> optionsForIfOver) {
+        GameObject optionBox = GetCorrectOptionUi(optionsList.Count);
+
+        optionBox.GetComponent<OptionBoxUI>().ShowPreviousMessage(currentConvo.GetDialogueText());
+        optionBox.GetComponent<OptionBoxUI>().GetChildText(0).GetComponent<Text>().text = currentConvo.GetDialogueText();
+
+        for (int i = 0; i < optionsList.Count; i++) {
+
+            //This if statement still needs to be checked, but can only be checked when there are more options
+            if (!optionBox.GetComponent<OptionBoxUI>().GetChildBtn(i).activeSelf)
+            {
+                optionBox.GetComponent<OptionBoxUI>().EnableBtn(i);
+            }
+            optionBox.GetComponent<OptionBoxUI>().ShowEndSymbol(optionsForIfOver[i].isOverConvo, i);
+            optionBox.GetComponent<OptionBoxUI>().SetBtnText(SetOption(i), optionsList[i]);
+
+        }
+
+        if (optionsList.Count < 2) {
+            for (int i = 1; i >= optionsList.Count; i--) {
+                optionBox.GetComponent<OptionBoxUI>().DisableBtn(i);
+            }
+        } else if (optionsList.Count < 4 && optionsList.Count > 2) {
+            for (int i = 3; i >= optionsList.Count; i--) {
+                optionBox.GetComponent<OptionBoxUI>().DisableBtn(i);
+            }
+        } else if (optionsList.Count < 6 && optionsList.Count > 4) {
+            // Here I need to disable the options that are not being used
+            for (int i = 5; i > optionsList.Count; i--) {
+                optionBox.GetComponent<OptionBoxUI>().DisableBtn(i);
+            }
+        }
+    }
+    public GameObject GetCorrectOptionUi(int amountOptions) {
+        if (amountOptions <= 2) {
+            optionUi_2.SetActive(true);
+            optionUi_4.SetActive(false);
+            optionsUi.SetActive(false);
+
+            return optionUi_2;
+        } else if (amountOptions <= 4) {
+            optionUi_2.SetActive(false);
+            optionUi_4.SetActive(true);
+            optionsUi.SetActive(false);
+
+            return optionUi_4;
+        } else {
+            optionUi_2.SetActive(false);
+            optionUi_4.SetActive(false);
+            optionsUi.SetActive(true);
+
+            return optionsUi;
+        }
+    }
+    public GameObject CheckActiveOptionBox() {
+        if (optionUi_4.activeSelf) {
+            return optionUi_4;
+        } else if (optionUi_2.activeSelf) {
+            return optionUi_2;
+        } else {
+            return optionsUi;
+        }
+    }
+    //This method is used to hid all of the dialogue that needs to be hidden because of game play choises
+    public void HidHiddenOptions(List<ConvoOption> optionsList) {
+        GameObject optionBox = GetCorrectOptionUi(optionsList.Count);
+        for (int i = 0; i < optionsList.Count; i++) {
+            if (optionsList[i].hidden) {
+                optionBox.GetComponent<OptionBoxUI>().DisableBtn(i);
+            }
+        }
+    }
+    //This method is used to set the current senario's conversation, by checking the name of the person to whom the nurse is talking to
+    public void SetSenarioConvo(string otherName) {
+        //chapter = SaveChapterDataToJsonFile();
+        if (chapter == null) { Debug.Log("The chapter is empty"); }
+        if (otherName != null) {
+            currentConvo = chapter.GetNextConvo(otherName);
+            //currentConvo.isUsed = true;
+        }
+    }
+    //This method returns an optionBtnUi by giving an option id
+    private GameObject SetOption(int index) {
+        GameObject optionBox = CheckActiveOptionBox();
+        GameObject option = optionBox.GetComponent<OptionBoxUI>().GetChildBtn(index);
+        return option;
+    }
+    //This method is used to clear the text boxes
+    public void ClearConversation() {
+        DisplayNextDialogue("", otherConvoUi);
+        DisplayNextDialogue("", convoUi);
+        otherConvoUi.GetComponent<ConvoUI>().DisableFinishSymbol();
+        convoUi.GetComponent<ConvoUI>().DisableFinishSymbol();
+    }
+    //This method sets either optionUi or convoUi to active depending on if there are options
+    public void CheckForOptions() {
+        if (currentConvo.currentDialogue.isOptions)
+        {
+            convoUi.SetActive(false);
+            GetCorrectOptionUi(currentConvo.GetDialogueOptionList().Count);
+            optionSpriteUi.SetActive(true);
+            otherSpriteUi.SetActive(false);
+            otherConvoUi.SetActive(false);
+            spriteUi.SetActive(false);
+            otherNameUi.SetActive(false);
+        }
+        else if (playerName.Equals(currentConvo.currentDialogue.name)) {
+            optionsUi.SetActive(false);
+            optionUi_2.SetActive(false);
+            optionUi_4.SetActive(false);
+            convoUi.SetActive(true);
+            spriteUi.SetActive(true);
+            otherConvoUi.SetActive(false);
+            optionSpriteUi.SetActive(false);
+            otherSpriteUi.SetActive(false);
+            otherNameUi.SetActive(false);
+        } else {
+            otherConvoUi.SetActive(true);
+            otherSpriteUi.SetActive(true);
+            convoUi.SetActive(false);
+            spriteUi.SetActive(false);
+            optionsUi.SetActive(false);
+            optionUi_2.SetActive(false);
+            optionUi_4.SetActive(false);
+            optionSpriteUi.SetActive(false);
+            otherNameUi.SetActive(true);
+        }
+    }
+    //This method returns a string list of all the availible options. Used to give text to the option buttons
+    public List<string> GiveStringOptionList(List<ConvoOption> optionList) {
+        List<string> tempList = new List<string>();
+        if (optionList.Count == 0) {
+            return tempList;
+        }
+        for (int i = 0; i < optionList.Count; i++) {
+            tempList.Add(optionList[i].optionName);
+            //if (!optionList[i].hidden) {
+            //    tempList.Add(optionList[i].optionName);
+            //}
+        }
+        return tempList;
+    }
+    public void SetCurrentSprite() {
+        Sprite currentSprite = allCharacters.GetCharactorSprite(currentConvo.GetDialogueName(), currentConvo.GetEmote());
+        Sprite currentSpriteShadow = allCharacters.GetShadowCharactorSprite(currentConvo.GetDialogueName(), currentConvo.GetEmote());
+        if (spriteUi != null && spriteUi.activeSelf) {
+            spriteUi.GetComponent<SpriteUI>().SetSpriteWithShadow(currentSpriteShadow, currentSprite);
+        } else if (otherSpriteUi != null && otherSpriteUi.activeSelf) {
+            otherNameUi.GetComponent<NameUi>().SetName().GetComponent<Text>().text = currentConvo.GetDialogueName();
+            otherSpriteUi.GetComponent<SpriteUI>().SetSpriteWithShadow(currentSpriteShadow, currentSprite);
+        } else if (optionSpriteUi != null && optionSpriteUi.activeSelf) {
+            optionSpriteUi.GetComponent<SpriteUI>().SetSpriteWithShadow(currentSpriteShadow, currentSprite);
+        }
+    }
+    public void checkInChapter1(){
+        if (personName.Equals(nurseLotte) && chapter.currentChapterId == 1) {
+            manager.GetComponent<HandleChapter1>().IsLotteInNurseRoom();
+            manager.GetComponent<HandleChapter1>().SetConvoForLotte();
+        }
+        if (personName.Equals(patientB) && chapter.currentChapterId == 1) {
+            manager.GetComponent<HandleChapter1>().CheckIfPlayerCheckedForContactPerson();
+        }
+        if (personName.Equals(patientAPeter) && chapter.currentChapterId == 1) {
+            manager.GetComponent<HandleChapter1>().SetLastPeterTalk();
+        }
+    }
+    //This method is used to save a new chaper data to a json file. It should only be used in development
+    public void SaveToJasonFile(Chapter chapter, string _newJsonFilePath){
+        string json = JsonUtility.ToJson(chapter, true);
+        File.WriteAllText(_newJsonFilePath, json);
+        Debug.Log("New json file saved! " + _newJsonFilePath);
+    }
+    //This method is used to give conversation data from json to the current chapter
+    public Chapter LoadConvo(string _newJsonFilePath) {
+        string json = File.ReadAllText(_newJsonFilePath);
+        Chapter senario = JsonUtility.FromJson<Chapter>(json);
+        return senario;
+    }
+    //This method sets with json file needs to be used when starting a scenario for english cases
+    public void SetEngJsonPath() {
+        SavedProgress();
+        _JasonFilePath = Application.streamingAssetsPath + jsonFileManager.GiveEngJsonFilePath(chapter.currentChapterId);
+        chapter = LoadConvo(_JasonFilePath);
+        SetSavedProgress();
+    }
+    //This method sets with json file needs to be used when starting a scenario for dutch cases
+    public void SetNedJsonPath() {
+        SavedProgress();
+        _JasonFilePath = Application.streamingAssetsPath + jsonFileManager.GiveDutchJsonFilePath(chapter.currentChapterId);
+        chapter = LoadConvo(_JasonFilePath);
+        SetSavedProgress();
+    }
+    //This method is used to save the progress that the conversation is at
+    public void SavedProgress() {
+        saveProgress.SaveProgress(chapter.convoList);
+    }
+    //This method is used to set the progress of the conversation after changing the language
+    public void SetSavedProgress() {
+        List<bool> usedList = saveProgress.SetSavedProgress();
+        for (int i = 0; i < chapter.convoList.Count; i++)
+        {
+            chapter.convoList[i].isUsed = usedList[i];
+        }
+    }
+    //This method is used to give new data for a new chapter. It should only be used when adding new data for a chapter
+    public Chapter CreateEngChapterData()
+    {
+        //Names for other person that isn't the player
+        //string nurseLote = "Nurse Lotte";
+        //string patientAPeter = "Peter Pluijmen";
+        //string patientB = "Betül Yildiz";
+        string patientBBrother = "Brother";
+        string patientBMother = "Mother";
+        string patientBSister = "Sister";
+        string patientBHusband = "Husband";
+
+        //The availible conversations
+        Conversation convoDefault = new Conversation("Default");
+        Conversation convo1 = new Conversation(nurseLotte);
+        Conversation convo1_1 = new Conversation(nurseLotte);
+        Conversation convo1_2 = new Conversation(nurseLotte);
+        Conversation convo1_3 = new Conversation(nurseLotte);
+        Conversation convo2 = new Conversation(patientAPeter);
+        Conversation convo2_1 = new Conversation(patientAPeter);
+        Conversation convo3 = new Conversation(patientB);
+        Conversation convo3_1 = new Conversation(patientB);
+        Conversation convo4 = new Conversation(patientBBrother);
+        Conversation convo5 = new Conversation(patientBMother);
+        Conversation convo6 = new Conversation(patientBSister);
+        Conversation convo7 = new Conversation(patientBHusband);
+
+        //Adding dialogue (name,sentence, option, end, used, hidden)
+        convo1.AddNewDialogue(nurseLotte, "Hey, good to see you here.", false, false, false, false);//0
+        convo1.AddNewDialogue(nurseLotte, "I know you are still new, but there was an emergency call from a patient in room C4.035.", false, false, false, false);//1
+        convo1.AddNewDialogue(nurseLotte, "Could you go check on him?", false, false, false, false);//2
+        convo1.AddNewDialogue(nurseLotte, "If you need help, you can find me in the staff room later on!", false, true, false, false);//3
+        //Need to set the start sentence
+        convo1.StartSetUp();
+        //Set Emotions
+        convo1.SetDialogueEmotion(0, emotion.HAPPY);
+        convo1.SetDialogueEmotion(0, emotion.WORRIED);
+        convo1.SetDialogueEmotion(3, emotion.HAPPY);
+        //Adding dialogue nextId
+        //convo1.SetDialogueNextId(3,0);
+
+        //Adding dialogue (name,sentence, option, end, used, hidden)
+        convo1_1.AddNewDialogue(playerName, "", true, false, false, false);//0
+        convo1_1.AddNewDialogue(nurseLotte, "Oh, just go to the end of this room and then turn left. If you follow the hallway, it is the second room.", false, false, false, false);//1
+        convo1_1.AddNewDialogue(nurseLotte, "Turn left at the end of the reception and follow the hallway all the way till the end.", false, false, false, false);//2
+        convo1_1.AddNewDialogue(nurseLotte, "You can't miss it!", false, false, false, false);//3
+        convo1_1.AddNewDialogue(nurseLotte, "Okay, see you later!", false, true, false, false);//4
+        convo1_1.AddNewDialogue(playerName, "Do you need something?", true, false, false, false);//5
+        //Need to set the start sentence
+        convo1_1.StartSetUp();
+        //Set Emotions
+        convo1_1.SetDialogueEmotion(0, emotion.WORRIED);
+        convo1_1.SetDialogueEmotion(3, emotion.HAPPY);
+        convo1_1.SetDialogueEmotion(4, emotion.HAPPY);
+        //Adding options
+        //This option needs to be hidden after it's asked
+        convo1_1.AddOption(0, "Where is room C4.035 again?");//0
+        convo1_1.AddOption(0, "Staff room? How can I find that?");//1
+        convo1_1.AddOption(0, "Sure, I will take care of it!");//2
+        convo1_1.AddOption(0, "Can I ask you again...");//3
+        convo1_1.AddOption(5, "Where is room C4.035 again?");//0
+        convo1_1.AddOption(5, "Staff room? How can I find that?");//1
+        convo1_1.AddOption(5, "Never mind, I remember now");//2
+        //End conversation option
+        convo1_1.SetOptionForConvoOver(0,2, true);
+        convo1_1.SetOptionForConvoOver(5, 2, true);
+        //Adding option nextId
+        convo1_1.SetNextIdInOption(0, 0, 1);
+        convo1_1.SetNextIdInOption(0, 1, 2);
+        convo1_1.SetNextIdInOption(0, 2, 4);
+        convo1_1.SetNextIdInOption(0, 3, 5);
+        convo1_1.SetNextIdInOption(5, 0, 1);
+        convo1_1.SetNextIdInOption(5, 1, 2);
+        convo1_1.SetNextIdInOption(5, 2, 4);
+        //Adding dialogue nextId
+        convo1_1.SetDialogueNextId(1, 0);
+        convo1_1.SetDialogueNextId(3, 0);
+        convo1_1.SetDialogueNextId(4, 0);
+        //Set Hidden options
+        convo1_1.SetOptionToHidden(5, 0, true);
+        convo1_1.SetOptionToHidden(5, 1, true);
+
+        //Adding dialogue (name,sentence, option, end, used, hidden)
+        convo1_2.AddNewDialogue(playerName, "Excuse me Lotte, could I ask you a question?", false, false, false, false);//0
+        convo1_2.AddNewDialogue(nurseLotte, "Yes of course. What is the problem?", false, false, false, false);//1
+        convo1_2.AddNewDialogue(playerName, "Yes of course. What is the problem?", true, false, false, false);//2
+        convo1_2.AddNewDialogue(nurseLotte, "Okay, see you later!", false, true, false, false);//3 end
+        convo1_2.AddNewDialogue(playerName, "The patient who pressed the emergency button is feeling unwell because his room neighbour has a lot of visitors and it is very loud in the room.", false, false, false, false);//4
+        //Check if player tried talking to visitor 
+        convo1_2.AddNewDialogue(nurseLotte, "Oh, I see. Did you try to talk to the visitor? If you explain the situation, they will probably understand.", false, false, false, false);//5
+        convo1_2.AddNewDialogue(playerName, "No, not yet. I will try that now, thank you!", false, false, false, false);//6
+        convo1_2.AddNewDialogue(playerName, "He asked me to talk to group, but they don't seem to speak nor understand English.", false, false, false, false);//7
+        convo1_2.AddNewDialogue(nurseLotte, "That really is a difficult situation. Do you know the name of the patient with the visitors?", false, false, false, false);//8
+        //Did player check for the patient name?
+        convo1_2.AddNewDialogue(playerName, "No, I don't think so. Where can I look up the patient's name?", false, false, false, false);//9
+        convo1_2.AddNewDialogue(nurseLotte, "There is a sheet with all important information about the patients at the end of their bed.", false, false, false, false);//10
+        convo1_2.AddNewDialogue(nurseLotte, "Maybe you should take a look? It's easier to plan your next steps if you have this information.", false, false, false, false);//11
+        //This is yes to look for name
+        convo1_2.AddNewDialogue(playerName, "Yes, if I remember correctly it should be...", false, false, false, false);//12
+        convo1_2.AddNewDialogue(playerName, "", true, false, false, false);//13
+        convo1_2.AddNewDialogue(nurseLotte, "Hmm, I don't remember a patient with that name. Are you sure?", false, false, false, false);//14
+        convo1_2.AddNewDialogue(playerName, "Oh, now that I think about it...", false, false, false, false);//15
+        convo1_2.AddNewDialogue(nurseLotte, "Oh, I remember her. She does not speak English unfortunately, but her husband does.", false, false, false, false);//16
+        convo1_2.AddNewDialogue(nurseLotte, "He usually visits her everyday around this time, so he is probably here as well today.", false, false, false, false);//17
+        convo1_2.AddNewDialogue(nurseLotte, "If you look up his name, maybe you can ask the other visitors where he is? Otherwise you could also give him a call. He is registered as her contact person.", false, false, false, false);//18
+        convo1_2.AddNewDialogue(playerName, "", true, false, false, false);//19
+        convo1_2.AddNewDialogue(nurseLotte, "You can check the patient registration system. The details of the contact persons are written down there.", false, false, false, false);//20
+        convo1_2.AddNewDialogue(nurseLotte, "Haha, I speak just as much Turkish as you do. I think you can solve this yourself!", false, false, false, false);//21
+        convo1_2.AddNewDialogue(nurseLotte, "Good luck!", false, true, false, false);//22 end
+        //This is if player talked to visitors/ didn't look for name
+        convo1_2.AddNewDialogue(playerName, "", true, false, false, false);//23
+        convo1_2.AddNewDialogue(nurseLotte, "Alright then.", false, true, false, false);//24 end
+        convo1_2.AddNewDialogue(playerName, "I tried to talk to the visitors, but they don't seem to speak nor understand English.", false, false, false, false);//25
+        convo1_2.AddNewDialogue(playerName, "", true, false, false, false);//26
+        convo1_2.AddNewDialogue(nurseLotte, "Alright then.", false, true, false, false);//27 end
+        convo1_2.AddNewDialogue(playerName, "I looked up the patient's name, it is...", false, false, false, false);//28
+        convo1_2.AddNewDialogue(playerName, "", true, false, false, false);//29
+        convo1_2.AddNewDialogue(nurseLotte, "Oh, they can go to the waiting room. It’s next to the reception area!", false, false, false, false);//30
+        convo1_2.AddNewDialogue(nurseLotte, "Good luck!", false, true, false, false);//31 end
+        convo1_2.AddNewDialogue(playerName, "", true, false, false, false);//32
+        convo1_2.AddNewDialogue(nurseLotte, "Good luck!", false, false, false, false);//33 
+        convo1_2.AddNewDialogue(playerName, "", true, false, false, false);//34
+        convo1_2.AddNewDialogue(nurseLotte, "Haha, I speak just as much Turkish as you do. I think you can solve this yourself!", false, false, false, false);//35
+        convo1_2.AddNewDialogue(nurseLotte, "Good luck!", false, false, false, false);//36
+        convo1_2.AddNewDialogue(playerName, "The patient who pressed the emergency button is feeling unwell because his room neighbour has a lot of visitors and it is very loud in the room.", false, false, false, false);//37
+        convo1_2.AddNewDialogue(nurseLotte, "That really is a difficult situation. Do you know the name of the patient with the visitors?", false, false, false, false);//38
+        //Need to set the start sentence
+        convo1_2.StartSetUp();
+        //Set Emotions
+        convo1_2.SetDialogueEmotion(0, emotion.WORRIED);
+        convo1_2.SetDialogueEmotion(13, emotion.THINKING);
+        //Adding options
+        convo1_2.AddOption(2, "Ask for advice");//0
+        convo1_2.AddOption(2, "I'll better go back to work.");//1
+        convo1_2.AddOption(13, "Azra Demir");//0
+        convo1_2.AddOption(13, "Zehra Yavuz");//1
+        convo1_2.AddOption(13, "Betül Yildiz");//2
+        convo1_2.AddOption(13, "Eylül Yilmaz");//3
+        convo1_2.AddOption(19, "How can I find out the contact person's name?");//0
+        convo1_2.AddOption(19, "Could you go and talk to the visitors?");//1
+        convo1_2.AddOption(19, "Thank you, I will see what I can do now.");//2
+        convo1_2.AddOption(19, "Can I ask you again...");//3
+        convo1_2.AddOption(23, "Ask for advice");//0
+        convo1_2.AddOption(23, "Never mind, I'll try it on my own.");//1
+        convo1_2.AddOption(26, "Ask for advice");//0
+        convo1_2.AddOption(26, "Never mind, I'll try it on my own.");//1
+        convo1_2.AddOption(29, "Where can visitors get a drink here?");//0
+        convo1_2.AddOption(29, "Could you go and talk to the visitors?");//1
+        convo1_2.AddOption(29, "Thank you, I will see what I can do now.");//2
+        convo1_2.AddOption(29, "Can I ask you again...");//3
+        convo1_2.AddOption(32, "Where can visitors get a drink here?");//0
+        convo1_2.AddOption(32, "Could you go and talk to the visitors?");//1
+        convo1_2.AddOption(32, "Thank you, I will see what I can do now.");//2
+        convo1_2.AddOption(34, "How can I find out the contact person's name?");//0
+        convo1_2.AddOption(34, "Could you go and talk to the visitors?");//1
+        convo1_2.AddOption(34, "Thank you, I will see what I can do now.");//2
+        //End conversation option
+        convo1_2.SetOptionForConvoOver(2,1,true);
+        convo1_2.SetOptionForConvoOver(19, 2, true);
+        convo1_2.SetOptionForConvoOver(23, 1, true);
+        convo1_2.SetOptionForConvoOver(26, 1, true);
+        convo1_2.SetOptionForConvoOver(29, 2, true);
+        convo1_2.SetOptionForConvoOver(32, 2, true);
+        convo1_2.SetOptionForConvoOver(34, 2, true);
+        //Adding option nextId
+        convo1_2.SetNextIdInOption(2, 0, 4);
+        convo1_2.SetNextIdInOption(2, 1, 3);
+        convo1_2.SetNextIdInOption(13, 0, 14);
+        convo1_2.SetNextIdInOption(13, 1, 14);
+        convo1_2.SetNextIdInOption(13, 2, 16);
+        convo1_2.SetNextIdInOption(13, 3, 14);
+        convo1_2.SetNextIdInOption(19, 0, 20);
+        convo1_2.SetNextIdInOption(19, 1, 35);
+        convo1_2.SetNextIdInOption(19, 2, 22);
+        convo1_2.SetNextIdInOption(19, 3, 34);
+        convo1_2.SetNextIdInOption(23, 0, 25);
+        convo1_2.SetNextIdInOption(23, 1, 24);
+        convo1_2.SetNextIdInOption(26, 0, 37);
+        convo1_2.SetNextIdInOption(26, 1, 27);
+        convo1_2.SetNextIdInOption(29, 0, 30);//0
+        convo1_2.SetNextIdInOption(29, 1, 21);//1
+        convo1_2.SetNextIdInOption(29, 2, 31);//2
+        convo1_2.SetNextIdInOption(29, 3, 32);//3
+        convo1_2.SetNextIdInOption(32, 0, 30);//0
+        convo1_2.SetNextIdInOption(32, 1, 21);//1
+        convo1_2.SetNextIdInOption(32, 2, 31);//2
+        convo1_2.SetNextIdInOption(34, 0, 20);
+        convo1_2.SetNextIdInOption(34, 1, 21);
+        convo1_2.SetNextIdInOption(34, 2, 22);
+        //Set nextDialogueId
+        convo1_2.SetDialogueNextId(3, 0);
+        convo1_2.SetDialogueNextId(6, 0);
+        convo1_2.SetDialogueNextId(11, 0);
+        convo1_2.SetDialogueNextId(15, 13);
+       // convo1_2.SetDialogueNextId(18, 29);
+        convo1_2.SetDialogueNextId(20, 19);
+        convo1_2.SetDialogueNextId(21, 36);
+        convo1_2.SetDialogueNextId(22, 19);
+        convo1_2.SetDialogueNextId(24, 23);
+        convo1_2.SetDialogueNextId(25, 8);
+        convo1_2.SetDialogueNextId(27, 26);
+        convo1_2.SetDialogueNextId(28, 13);
+        convo1_2.SetDialogueNextId(30, 29);
+        convo1_2.SetDialogueNextId(31, 29);
+        convo1_2.SetDialogueNextId(33, 19);
+        convo1_2.SetDialogueNextId(35, 19);
+        convo1_2.SetDialogueNextId(36, 29);
+        convo1_2.SetDialogueNextId(38, 28);
+        //Set Hidden options
+        convo1_2.SetOptionToHidden(32, 0, true);
+        convo1_2.SetOptionToHidden(32, 1, true);
+        convo1_2.SetOptionToHidden(34, 0, true);
+        convo1_2.SetOptionToHidden(34, 1, true);
+
+        //Adding dialogue (name,sentence, option, end, used, hidden)
+        convo1_3.AddNewDialogue(playerName, "", true, false, false, false);//0
+        convo1_3.AddNewDialogue(nurseLotte, "Alright then.", false, true, false, false);//1
+        convo1_3.AddNewDialogue(playerName, "Hey Lotte, I managed to talk to the contact person.", false, false, false, false);//2
+        convo1_3.AddNewDialogue(nurseLotte, "Peter already told me that you managed to solve the situation!", false, false, false, false);//3
+        convo1_3.AddNewDialogue(nurseLotte, "It looks like you found a very nice way of solving the situation.", false, false, false, false);//4
+        convo1_3.AddNewDialogue(nurseLotte, "Everybody had to make a few compromises, but in the end everyone is happy with the situation.", false, false, false, false);//5
+        convo1_3.AddNewDialogue(nurseLotte, "I am very proud of you!", false, true, false, false);//6
+        convo1_3.AddNewDialogue(nurseLotte, "But it looks like not everybody is happy with the situation now.", false, false, false, false);//7
+        convo1_3.AddNewDialogue(nurseLotte, "All visitors left in a hurry, and Betül seems to be very disappointed.", false, false, false, false);//8
+        convo1_3.AddNewDialogue(nurseLotte, "Maybe next time you can try to be more understanding of everybody's situation?", false, false, false, false);//9
+        convo1_3.AddNewDialogue(nurseLotte, "But either way, I am very proud that you managed to handle the situation!", false, true, false, false);//10
+        //Need to set the start sentence
+        convo1_3.StartSetUp();
+        //Set Emotions
+        convo1_3.SetDialogueEmotion(6, emotion.HAPPY);
+        convo1_3.SetDialogueEmotion(8, emotion.SAD);
+        convo1_3.SetDialogueEmotion(8, emotion.WORRIED);
+        convo1_3.SetDialogueEmotion(10, emotion.HAPPY);
+        //Adding options
+        convo1_3.AddOption(0, "[This will end the chapter]");//0
+        convo1_3.AddOption(0, "Give me a minute.");//1
+        //End conversation option
+        convo1_3.SetOptionForConvoOver(0, 1, true);
+        //Adding option nextId
+        convo1_3.SetNextIdInOption(0, 0, 2);
+        convo1_3.SetNextIdInOption(0, 1, 1);
+        //Adding dialogue nextId 
+        convo1_3.SetDialogueNextId(1,0);
+
+        //Adding dialogue (name,sentence, option, end, used, hidden)
+        convo2.AddNewDialogue(playerName, "", true, false, false, false);//0
+        convo2.AddNewDialogue(patientAPeter, "Yes, I did, thank you for coming so quickly. Can you hear all the noise?", false, false, false, false);//1
+        convo2.AddNewDialogue(playerName, "Can you hear all the noise?", true, false, false, false);//2
+        convo2.AddNewDialogue(patientAPeter, "Oh, it is just so loud in here. You can hear it as well, right?", false, false, false, false);//3
+        convo2.AddNewDialogue(patientAPeter, "My room neighbour has quite a lot of visitors since a few hours now.", false, false, false, false);//4
+        convo2.AddNewDialogue(patientAPeter, "I tried to ask them to be a bit more quit, but they seem to just ignore me.", false, false, false, false);//5
+        convo2.AddNewDialogue(patientAPeter, "Please, could you talk to them? I just want to rest and that many people are making me feel very unwell.", false, false, false, false);//6
+        convo2.AddNewDialogue(playerName, "Please, could you talk to them?", true, false, false, false);//7
+        convo2.AddNewDialogue(patientAPeter, "Really? Maybe you should turn the volume up a bit!", false, false, false, false);//8
+        convo2.AddNewDialogue(patientAPeter, "Anyway, my room neighbour has quite a lot of visitors since a few hours now.", false, false, false, false);//9
+        convo2.AddNewDialogue(patientAPeter, "I tried to ask them to be a bit more quiet, but they seem to just ignore me.", false, false, false, false);//10
+        convo2.AddNewDialogue(patientAPeter, "Please, could you talk to them? I just want to rest and that many people are making me feel very unwell.", false, false, false, false);//11
+        convo2.AddNewDialogue(patientAPeter, "Yes, the woman in the bed on the left side of this room.", false, false, false, false);//12
+        convo2.AddNewDialogue(patientAPeter, "You should probably go and have a look at the situation over there.", false, false, false, false);//13
+        convo2.AddNewDialogue(patientAPeter, "Yes, but I am not sure if they understood me. They just smiled and didn't pay too much attention to me.", false, false, false, false);//14
+        convo2.AddNewDialogue(patientAPeter, "Thank you", false, true, false, false);//15
+        convo2.AddNewDialogue(playerName, "", true, false, false, false);//16
+        //Need to set the start sentence 
+        convo2.StartSetUp();
+        //Set Emotions
+        convo2.SetDialogueEmotion(0, emotion.WORRIED);
+        convo2.SetDialogueEmotion(3, emotion.SAD);
+        convo2.SetDialogueEmotion(8, emotion.MAD);
+        convo2.SetDialogueEmotion(10, emotion.SAD);
+        convo2.SetDialogueEmotion(11, emotion.SAD);
+        convo2.SetDialogueEmotion(14, emotion.CONFUSSED);
+        convo2.SetDialogueEmotion(15, emotion.HAPPY);
+        //Adding options 
+        convo2.AddOption(0, "Did you call for assistance?");//0
+        convo2.AddOption(0, "How can I help you?");//1
+        convo2.AddOption(2, "Yes, I noticed right away.");//0
+        convo2.AddOption(2, "Now that you say it, I definitely hear it.");//1
+        convo2.AddOption(2, "I don't really hear anything.");//2
+        convo2.AddOption(7, "Your room neighbour?");//0
+        convo2.AddOption(7, "You tried to talk to them already?");//1
+        convo2.AddOption(7, "Yes of course, I will see what I can do.");//2
+        convo2.AddOption(7, "Sorry, could I ask you again...");//3
+        convo2.AddOption(16, "Your room neighbour?");//0
+        convo2.AddOption(16, "You tried to talk to them already?");//1
+        convo2.AddOption(16, "Yes of course, I will see what I can do.");//2
+        //Adding option nextId
+        convo2.SetNextIdInOption(0, 0, 1);
+        convo2.SetNextIdInOption(0, 1, 3);
+        convo2.SetNextIdInOption(2, 0, 4);
+        convo2.SetNextIdInOption(2, 1, 4);
+        convo2.SetNextIdInOption(2, 2, 8);
+        convo2.SetNextIdInOption(7, 0, 12);
+        convo2.SetNextIdInOption(7, 1, 14);
+        convo2.SetNextIdInOption(7, 2, 15);
+        convo2.SetNextIdInOption(7, 3, 16);
+        convo2.SetNextIdInOption(16, 0, 12);
+        convo2.SetNextIdInOption(16, 1, 14);
+        convo2.SetNextIdInOption(16, 2, 15);
+        //End conversation option
+        convo2.SetOptionForConvoOver(7, 2, true);
+        convo2.SetOptionForConvoOver(16,2, true);
+        //Adding dialogue nextId 
+        convo2.SetDialogueNextId(3, 2);
+        convo2.SetDialogueNextId(11, 7);
+        convo2.SetDialogueNextId(13, 7);
+        convo2.SetDialogueNextId(14, 7);
+        convo2.SetDialogueNextId(15, 7);
+        //Set Hidden options
+        convo2.SetOptionToHidden(16, 0, true);
+        convo2.SetOptionToHidden(16, 1, true);
+
+        //Adding dialogue (name,sentence, option, end, used, hidden)
+        convo2_1.AddNewDialogue(playerName, "Hello Peter, how are you?", false, false, false, false);//0
+        convo2_1.AddNewDialogue(patientAPeter, "I am much better, thank you a lot.", false, false, false, false);//1
+        convo2_1.AddNewDialogue(patientAPeter, "My neighbour's visitors all left, but they did not look happy.", false, false, false, false);//2
+        convo2_1.AddNewDialogue(patientAPeter, "They left because of me, didn't they?", false, false, false, false);//3
+        convo2_1.AddNewDialogue(patientAPeter, "That makes me sad, I did not want to ruin their family reunion.", false, false, false, false);//4
+        convo2_1.AddNewDialogue(patientAPeter, "But thank you non the less for taking care of me.", false, true, false, false);//5
+        convo2_1.AddNewDialogue(patientAPeter, "The visitors are still there, but they are a lot more quiet now.", false, false, false, false);//6
+        convo2_1.AddNewDialogue(patientAPeter, "The nice young man even apologized to me.", false, false, false, false);//7
+        convo2_1.AddNewDialogue(patientAPeter, "He explained that for them it is normal to have a lot of visitors at once.", false, false, false, false);//8
+        convo2_1.AddNewDialogue(patientAPeter, "So thank you a lot for talking to them!", false, true, false, false);//9
+        convo2_1.AddNewDialogue(patientAPeter, "I still can't understand why they thought that it's okay to make such a commotion in a hospital.", false, false, false, false);//10
+        convo2_1.AddNewDialogue(patientAPeter, "But it is a lot better now, so thank you a lot for helping me out!", false, true, false, false);//11
+        convo2_1.AddNewDialogue(patientAPeter, "It is so much more quiet now since a lot of the visitors left.", false, false, false, false);//12
+        //Need to set the start sentence 
+        convo2_1.StartSetUp();
+        //Set Emotions
+        convo2_1.SetDialogueEmotion(4, emotion.SAD);
+        convo2_1.SetDialogueEmotion(4, emotion.HAPPY);
+        convo2_1.SetDialogueEmotion(9, emotion.HAPPY);
+        convo2_1.SetDialogueEmotion(10, emotion.WORRIED);
+        convo2_1.SetDialogueEmotion(11, emotion.HAPPY);
+        //Adding dialogue nextId 
+        convo2_1.SetDialogueNextId(12, 7);
+
+        //Adding dialogue (name,sentence, option, end, used, hidden)
+        convo3.AddNewDialogue(playerName, "Excuse me...", false, false, false, false);//0
+        convo3.AddNewDialogue(patientB, "Affedersiniz, ingilizce bilmiyorum. Lütfen kocamla konuş", false, true, false, false);//1
+        //Need to set the start sentence
+        convo3.StartSetUp();
+        //Adding dialogue nextId 
+        convo3.SetDialogueNextId(1, 0);
+
+        convo3_1.AddNewDialogue(playerName, "Excuse me, I am looking for…", false,false,false,false);//0
+        convo3_1.AddNewDialogue(playerName, "", true, false, false, false);//1
+        convo3_1.AddNewDialogue(patientB, "Oh, Yusuf! He drink.", false, true, false, false);//2
+        convo3_1.AddNewDialogue(patientB, "Üzgünüm anlamadim", false, false, false, false);//3
+        convo3_1.AddNewDialogue(patientB, "", true, false, false, false);//4
+        convo3_1.AddNewDialogue(playerName, "Excuse me for a moment", false, true, false, false);//5
+        //Need to set the start sentence
+        convo3_1.StartSetUp();
+        //Set Emotions
+        convo3_1.SetDialogueEmotion(1, emotion.THINKING);
+        //Adding options 
+        convo3_1.AddOption(1, "Elif Demir");
+        convo3_1.AddOption(1, "Sandra van der Horst");
+        convo3_1.AddOption(1, "Marten Pastor");
+        convo3_1.AddOption(1, "Yusuf Yildiz");
+        convo3_1.AddOption(1, "Vincent van der Heijden");
+        convo3_1.AddOption(1, "Jana Doe");
+        convo3_1.AddOption(4, "Continue asking");//0
+        convo3_1.AddOption(4, "Leave conversation");//1
+        //Adding option nextId
+        convo3_1.SetNextIdInOption(1, 0, 3);
+        convo3_1.SetNextIdInOption(1, 1, 3);
+        convo3_1.SetNextIdInOption(1, 2, 3);
+        convo3_1.SetNextIdInOption(1, 3, 2);
+        convo3_1.SetNextIdInOption(1, 4, 3);
+        convo3_1.SetNextIdInOption(1, 5, 3);
+        convo3_1.SetNextIdInOption(4, 0, 1);
+        convo3_1.SetNextIdInOption(4, 1, 5);
+        //End conversation option
+        convo3_1.SetOptionForConvoOver(4, 1, true);
+        //Adding dialogue nextId 
+        convo3_1.SetDialogueNextId(2, 2);
+        convo3_1.SetDialogueNextId(5, 0);
+        //Set Hidden options
+        convo3_1.SetOptionToHidden(1, 0, true);
+        convo3_1.SetOptionToHidden(1, 1, true);
+        convo3_1.SetOptionToHidden(1, 2, true);
+        convo3_1.SetOptionToHidden(1, 3, true);
+        convo3_1.SetOptionToHidden(1, 4, true);
+        convo3_1.SetOptionToHidden(1, 5, true);
+
+        //Adding dialogue (name,sentence, option, end, used, hidden)
+        convo4.AddNewDialogue(playerName, "Hello can I have a word with you?", false, false, false, false);//0
+        convo4.AddNewDialogue(patientBBrother, "Merhaba tanıştığımıza memnun oldum!", false, true, false, false);//1
+        //Need to set the start sentence
+        convo4.StartSetUp();
+        //Adding dialogue nextId 
+        convo4.SetDialogueNextId(1, 0);
+
+        //Adding dialogue (name,sentence, option, end, used, hidden)
+        convo5.AddNewDialogue(playerName, "Excuse me, could I have a work with you?", false, false, false, false);//0
+        convo5.AddNewDialogue(patientBMother, "Merhaba merhaba, umarım harika bir gün geçiriyorsundur", false, true, false, false);//1
+        //Need to set the start sentence
+        convo5.StartSetUp();
+        //Adding dialogue nextId 
+        convo5.SetDialogueNextId(1, 0);
+
+        //Adding dialogue (name,sentence, option, end, used, hidden)
+        convo6.AddNewDialogue(playerName, "Hello, can I talk to you for a moment?", false, false, false, false);//0
+        convo6.AddNewDialogue(patientBSister, "Üzgünüm İngilizce bilmiyorum.Ama burada harika bir iş çıkarıyorsun, kardeşime baktığın için çok teşekkür ederim!", false, true, false, false);//1
+        //Need to set the start sentence
+        convo6.StartSetUp();
+        //Adding dialogue nextId 
+        convo6.SetDialogueNextId(1, 0);
+
+        //Adding dialogue (name,sentence, option, end, used, hidden)
+        convo7.AddNewDialogue(playerName, "Excuse me, are you Yusuf Yildiz?", false, false, false, false);//0
+        convo7.AddNewDialogue(patientBHusband, "Yes, I am. Did anything happen to my wife?", false, false, false, false);//1
+        convo7.AddNewDialogue(playerName, "Oh no, don't worry.", false, false, false, false);//2
+        convo7.AddNewDialogue(playerName, "", true, false, false, false);//3
+        convo7.AddNewDialogue(patientBHusband, "Yes, everybody wanted to show their support immediately when they heard that Betül is in the hospital.", false, false, false, false);//4
+        convo7.AddNewDialogue(patientBHusband, "I think she is quite happy about the distraction.", false, false, false, false);//5
+        convo7.AddNewDialogue(playerName, "", true, false, false, false);//6
+        convo7.AddNewDialogue(patientBHusband, "Yes, I think Betül is feeling much better already!", false, false, false, false);//7
+        convo7.AddNewDialogue(patientBHusband, "I am also glad that her family was able to visit her today.", false, false, false, false);//8
+        convo7.AddNewDialogue(patientBHusband, "Oh, what is the problem?", false, false, false, false);//9
+        convo7.AddNewDialogue(playerName, "", true, false, false, false);//10
+        convo7.AddNewDialogue(patientBHusband, "Alright", false, true, false, false);//11
+        convo7.AddNewDialogue(patientBHusband, "Well, nobody told us about it so far.", false, false, false, false);//12
+        convo7.AddNewDialogue(patientBHusband, "I will talk to my family, but I don't think that we are being treated fairly here.", false, true, false, false);//13
+        convo7.AddNewDialogue(patientBHusband, "Oh, I am very sorry to hear that. Is there anything we can do?", false, false, false, false);//14
+        convo7.AddNewDialogue(playerName, "...your wife's room neighbour is feeling very unwell with all the noise.", false, false, false, false);//15
+        convo7.AddNewDialogue(patientBHusband, "Oh, I am very sorry to hear that, I didn't know. Is there anything we can do?", false, false, false, false);//16
+        convo7.AddNewDialogue(playerName, "What can we do?", true, false, false, false);//17
+        convo7.AddNewDialogue(playerName, "The visitors are also distracting your wife's room neighbour, Peter.", false, false, false, false);//18
+        convo7.AddNewDialogue(patientBHusband, "Why, what is the problem?", false, false, false, false);//19
+        convo7.AddNewDialogue(playerName, "What is the problem?", true, false, false, false);//20
+        convo7.AddNewDialogue(patientBHusband, "Well, nobody told us about this so far.", false, false, false, false);//21
+        convo7.AddNewDialogue(patientBHusband, "I will talk with my family about it, but I don't think that we are being treated fairly.", false, true, false, false);//22
+        convo7.AddNewDialogue(patientBHusband, "Oh, I am very sorry about that. Is there something we can do?", false, false, false, false);//23
+        convo7.AddNewDialogue(patientBHusband, "I did not know that there is a limit of visitors.", false, false, false, false);//24
+        convo7.AddNewDialogue(playerName, "The other visitors can always wait here or in the cafeteria.", false, false, false, false);//25
+        convo7.AddNewDialogue(patientBHusband, "Yes, of course, I will talk to my family. Is there anything else?", false, false, false, false);//26
+        convo7.AddNewDialogue(patientBHusband, "Hm, that is a bit demanding. But I will see what I can do. Is there anything else?", false, false, false, false);//27
+        convo7.AddNewDialogue(patientBHusband, "Thank you for letting me know!", false, false, false, false);//28
+        convo7.AddNewDialogue(patientBHusband, "For us having a lot of family and friends around is normal and comforting, so I didn't consider the other patient.", false, false, false, false);//29
+        convo7.AddNewDialogue(patientBHusband, "But I will talk to my family about it!", false, true, false, false);//30
+        //Need to set the start sentence
+        convo7.StartSetUp();
+        //Set Emotions
+        convo7.SetDialogueEmotion(4, emotion.HAPPY);
+        convo7.SetDialogueEmotion(9, emotion.WORRIED);
+        convo7.SetDialogueEmotion(12, emotion.MAD);
+        convo7.SetDialogueEmotion(13, emotion.MAD);
+        convo7.SetDialogueEmotion(16, emotion.WORRIED);
+        convo7.SetDialogueEmotion(19, emotion.WORRIED);
+        convo7.SetDialogueEmotion(21, emotion.MAD);
+        convo7.SetDialogueEmotion(22, emotion.MAD);
+        convo7.SetDialogueEmotion(28, emotion.HAPPY);
+        //Adding options 
+        convo7.AddOption(3, "I noticed that your wife has a lot of visitors.");//0
+        convo7.AddOption(3, "Your wife's room neighbour asked me to talk to you.");//1
+        convo7.AddOption(3, "Are you enjoying the visit?");//2
+        convo7.AddOption(3, "I will come back to you later.");//3
+        convo7.AddOption(6, "That is nice to hear! However...");//0
+        convo7.AddOption(6, "To be honest, it might be better if the visitors would leave.");//1
+        convo7.AddOption(6, "Unfortunately the visitors aren't only distracting her...");//2
+        convo7.AddOption(6, "There has been a complaint about the noise.");//3
+        convo7.AddOption(10, "Your family is too loud and it is making him feel uncomfortable.");//0
+        convo7.AddOption(10, "He is feeling unwell, and can't rest when there are so many people around him.");//1
+        convo7.AddOption(10, "There are too many visitors in the room.");//2
+        convo7.AddOption(10, "He is not feeling well and the noise is making things worse.");//3
+        convo7.AddOption(17, "It would be great if you could reduce the people who visit at once.");//0
+        convo7.AddOption(17, "I think Peter would be glad about an apology.");//1
+        convo7.AddOption(17, "Maybe you could try to be a little bit more quiet?");//2
+        convo7.AddOption(17, "That should be enough.");//3
+        convo7.AddOption(20, "Your family is too loud and it is disturbing the other patient.");//0
+        convo7.AddOption(20, "Your wife's room neighbour is not feeling well.");//1
+        convo7.AddOption(20, "Your wife's room neighbour is feeling disturbed by the commotion.");//2
+        convo7.AddOption(20, "There are too many visitors at once.");//3
+        //End conversation option
+        convo7.SetOptionForConvoOver(3,3, true);
+        convo7.SetOptionForConvoOver(17, 3, true);
+        //Adding option nextId
+        convo7.SetNextIdInOption(3, 0, 4);//0
+        convo7.SetNextIdInOption(3, 1, 7);//1
+        convo7.SetNextIdInOption(3, 2, 9);//2
+        convo7.SetNextIdInOption(3, 3, 11);//3
+        convo7.SetNextIdInOption(6, 0, 15);//0
+        convo7.SetNextIdInOption(6, 1, 19);//1
+        convo7.SetNextIdInOption(6, 2, 18);//2
+        convo7.SetNextIdInOption(6, 3, 19);//3
+        convo7.SetNextIdInOption(10, 0, 12);//0
+        convo7.SetNextIdInOption(10, 1, 14);//1
+        convo7.SetNextIdInOption(10, 2, 12);//2
+        convo7.SetNextIdInOption(10, 3, 14);//3
+        convo7.SetNextIdInOption(17, 0, 25);//0
+        convo7.SetNextIdInOption(17, 1, 27);//1
+        convo7.SetNextIdInOption(17, 2, 26);//2
+        convo7.SetNextIdInOption(17, 3, 28);//3
+        convo7.SetNextIdInOption(20, 0, 21);//0
+        convo7.SetNextIdInOption(20, 1, 23);//1
+        convo7.SetNextIdInOption(20, 2, 21);//2
+        convo7.SetNextIdInOption(20, 3, 24);//3
+        //Adding dialogue nextId 
+        convo7.SetDialogueNextId(8, 5);
+        convo7.SetDialogueNextId(11, 3);
+        convo7.SetDialogueNextId(14, 17);
+        convo7.SetDialogueNextId(18, 16);
+        convo7.SetDialogueNextId(23, 17);
+        convo7.SetDialogueNextId(24, 22);
+        convo7.SetDialogueNextId(26, 17);
+        convo7.SetDialogueNextId(27, 17);
+        //Set Hidden options
+        convo7.SetOptionToHidden(17, 3, true);
+
+        // This communication is used when there are no more conversations left
+        //Adding dialogue to convoDefault
+        convoDefault.AddNewDialogue(playerName, "I should go do something else", false, true, false, false);
+        //Need to set the start sentence convoDefault
+        convoDefault.StartSetUp();
+
+        //A list of communication for this chapter
+        List<Conversation> chapterDataList = new List<Conversation>();
+
+        //Adding communications to the chaper
+        chapterDataList.Add(convo1);//0
+        chapterDataList.Add(convo1_1);//1
+        chapterDataList.Add(convo1_2);//2
+        chapterDataList.Add(convo1_3);//3
+        chapterDataList.Add(convo2);//4
+        chapterDataList.Add(convo2_1);//5
+        chapterDataList.Add(convo3);//6
+        chapterDataList.Add(convo3_1);//7
+        chapterDataList.Add(convo4);//8
+        chapterDataList.Add(convo5);//9
+        chapterDataList.Add(convo6);//10
+        chapterDataList.Add(convo7);//11
+        chapterDataList.Add(convoDefault);//12
+
+        ////Create a ChapterConversation
+        Chapter chapter = new Chapter(chapterDataList,1);
+
+        return chapter;
+    }
+
+    public Chapter CreateNlChapterData()
+    {
+        //Names for other person that isn't the player
+        //string nurseLote = "Nurse Lotte";
+        //string patientAPeter = "Peter Pluijmen";
+        //string patientB = "Betül Yildiz";
+        string patientBBrother = "Brother";
+        string patientBMother = "Mother";
+        string patientBSister = "Sister";
+        string patientBHusband = "Husband";
+
+        //The available  conversations
+        Conversation convoDefault = new Conversation("Default");
+        Conversation convo1 = new Conversation(nurseLotte);
+        Conversation convo1_1 = new Conversation(nurseLotte);
+        Conversation convo1_2 = new Conversation(nurseLotte);
+        Conversation convo1_3 = new Conversation(nurseLotte);
+        Conversation convo2 = new Conversation(patientAPeter);
+        Conversation convo2_1 = new Conversation(patientAPeter);
+        Conversation convo3 = new Conversation(patientB);
+        Conversation convo3_1 = new Conversation(patientB);
+        Conversation convo4 = new Conversation(patientBBrother);
+        Conversation convo5 = new Conversation(patientBMother);
+        Conversation convo6 = new Conversation(patientBSister);
+        Conversation convo7 = new Conversation(patientBHusband);
+
+        //Adding dialogue (name, sentence, option, end, used, hidden)
+        convo1.AddNewDialogue(nurseLotte, "Hoi, goed om je te zien.", false, false, false, false);//0
+        convo1.AddNewDialogue(nurseLotte, "Ik weet dat je nieuw bent maar er is een noodoproep van een patiënt in kamer C4.035", false, false, false, false);//1
+        convo1.AddNewDialogue(nurseLotte, "Kun je even bij hem langsgaan?", false, false, false, false);//2
+        convo1.AddNewDialogue(nurseLotte, "Ik ben in de personeelsruimte als je hulp nodig hebt!", false, true, false, false);//3
+        //Need to set the start sentence
+        convo1.StartSetUp();
+        //Set Emotions
+        convo1.SetDialogueEmotion(0, emotion.HAPPY);
+        convo1.SetDialogueEmotion(0, emotion.WORRIED);
+        convo1.SetDialogueEmotion(3, emotion.HAPPY);
+        //Adding dialogue nextId
+        //convo1.SetDialogueNextId(3,0);
+
+        //Adding dialogue (name,sentence, option, end, used, hidden)
+        convo1_1.AddNewDialogue(playerName, "", true, false, false, false);//0
+        convo1_1.AddNewDialogue(nurseLotte, "Oh, ga aan het eind van deze kamer links. Het is dan de tweede kamer in de gang", false, false, false, false);//1
+        convo1_1.AddNewDialogue(nurseLotte, "Sla linksaf bij de receptie en volg de gang totdat je niet verder kunt.", false, false, false, false);//2
+        convo1_1.AddNewDialogue(nurseLotte, "Je kan het niet missen!", false, false, false, false);//3
+        convo1_1.AddNewDialogue(nurseLotte, "Oké, tot straks!", false, true, false, false);//4
+        convo1_1.AddNewDialogue(playerName, "Heb je iets nodig?", true, false, false, false);//5
+        //Need to set the start sentence
+        convo1_1.StartSetUp();
+        //Set Emotions
+        convo1_1.SetDialogueEmotion(0, emotion.WORRIED);
+        convo1_1.SetDialogueEmotion(3, emotion.HAPPY);
+        convo1_1.SetDialogueEmotion(4, emotion.HAPPY);
+        //Adding options
+        //This option needs to be hidden after it's asked
+        convo1_1.AddOption(0, "Waar is kamer C4.035 ook alweer?");
+        convo1_1.AddOption(0, "Personeelsruimte? Waar is dat?");
+        //This option needs to be hidden after it's asked
+        convo1_1.AddOption(0, "Geen probleem, ik zal ervoor zorgen!");
+        convo1_1.AddOption(0, "Mag ik je nog een keer vragen...");
+        //Unhide when option 00 is clicked at least once
+        convo1_1.AddOption(5, "Waar is kamer C4.035 ook alweer?");
+        //Unhide when option 01 is clicked at least once
+        convo1_1.AddOption(5, "Personeelsruimte? Waar is dat?");
+        convo1_1.AddOption(5, "Oh, laat maar ik weet het alweer");
+        //Adding option nextId
+        convo1_1.SetNextIdInOption(0, 0, 1);
+        convo1_1.SetNextIdInOption(0, 1, 2);
+        convo1_1.SetNextIdInOption(0, 2, 4);
+        convo1_1.SetNextIdInOption(0, 3, 5);
+        convo1_1.SetNextIdInOption(5, 0, 1);
+        convo1_1.SetNextIdInOption(5, 1, 2);
+        convo1_1.SetNextIdInOption(5, 2, 4);
+        //End conversation option
+        convo1_1.SetOptionForConvoOver(0, 2, true);
+        convo1_1.SetOptionForConvoOver(5, 2, true);
+        //Adding dialogue nextId
+        convo1_1.SetDialogueNextId(1, 0);
+        convo1_1.SetDialogueNextId(3, 0);
+        convo1_1.SetDialogueNextId(4, 0);
+        //Set Hidden options
+        convo1_1.SetOptionToHidden(5, 0, true);
+        convo1_1.SetOptionToHidden(5, 1, true);
+
+        //Adding dialogue (name,sentence, option, end, used, hidden)
+        convo1_2.AddNewDialogue(playerName, "Pardon Lotte, mag ik je iets vragen?", false, false, false, false);//0
+        convo1_2.AddNewDialogue(nurseLotte, "Natuurlijk. Wat is er?", false, false, false, false);//1
+        convo1_2.AddNewDialogue(playerName, "Natuurlijk. Wat is er?", true, false, false, false);//2
+        convo1_2.AddNewDialogue(nurseLotte, "Oké, tot ziens!", false, true, false, false);//3
+        convo1_2.AddNewDialogue(playerName, "De patiënt die op de noodknop heeft gedrukt voelt zich niet goed. De andere patiënt op zijn kamer heeft erg veel bezoekers die flink wat lawaai maken.", false, false, false, false);//4
+        //Check if player tried talking to visitor 
+        convo1_2.AddNewDialogue(nurseLotte, "Oh, ik snap het. Heb je al geprobeerd om met de bezoekers te praten? Als je de situatie uitlegt dan zullen ze het vast begrijpen.", false, false, false, false);//5
+        convo1_2.AddNewDialogue(playerName, "Nee, nog niet. Ik ga het nu doen. Bedankt!", false, false, false, false);//6
+        convo1_2.AddNewDialogue(playerName, "Hij heeft mij gevraagd om met de bezoekers te praten, maar volgens mij spreken ze geen Nederlands.", false, false, false, false);//7
+        convo1_2.AddNewDialogue(nurseLotte, "Dat is een moeilijke situatie. Weet je de naam van de patiënt die bezoekers over de vloer heeft?", false, false, false, false);//8
+        //Did player check for the patient name?
+        convo1_2.AddNewDialogue(playerName, "Nee, geen idee. Waar kan ik de naam van de patiënt vinden?", false, false, false, false);//9
+        convo1_2.AddNewDialogue(nurseLotte, "Aan het voeteneinde van het bed van de patiënt hangt een blad met alle belangrijke informatie over die patiënt.", false, false, false, false);//10
+        convo1_2.AddNewDialogue(nurseLotte, "Misschien kun je daar even naar kijken? Als je deze informatie hebt is het makkelijker om te besluiten wat je daarna gaat/moet doen.", false, false, false, false);//11
+        //This is yes to look for name
+        convo1_2.AddNewDialogue(playerName, "Ja, volgens mij heet ze...", false, false, false, false);//12
+        convo1_2.AddNewDialogue(playerName, "", true, false, false, false);//13
+        convo1_2.AddNewDialogue(nurseLotte, "Hmm, ik herinner me geen patiënt met die naam. Weet je zeker dat dat haar naam is?", false, false, false, false);//14
+        convo1_2.AddNewDialogue(playerName, "Oh, nu ik er over na denk...", false, false, false, false);//15
+        convo1_2.AddNewDialogue(nurseLotte, "Oh ja, ik ken haar wel. Zij spreekt geen Nederlands, maar haar man wel.", false, false, false, false);//16
+        convo1_2.AddNewDialogue(nurseLotte, "Hij bezoekt haar normaal gesproken elke dag rond deze tijd, dus hij zal er vandaag waarschijnlijk ook zijn.", false, false, false, false);//17
+        convo1_2.AddNewDialogue(nurseLotte, "Als je zijn naam opzoekt dan kun je de andere bezoekers misschien vragen waar hij is. Anders kun je hem ook bellen. Hij staat geregistreerd als haar contactpersoon.", false, false, false, false);//18
+        convo1_2.AddNewDialogue(playerName, "", true, false, false, false);//19
+        convo1_2.AddNewDialogue(nurseLotte, "Je kunt het patiëntenregistratiesysteem raadplegen. Daar worden de gegevens van de contactpersonen genoteerd.", false, false, false, false);//20
+        convo1_2.AddNewDialogue(nurseLotte, "Haha, ik spreek net zoveel Turks als jij. Ik denk dat je dit zelf wel op kunt lossen!", false, false, false, false);//21
+        convo1_2.AddNewDialogue(nurseLotte, "Veel succes!", false, true, false, false);//22
+        //This is if player talked to visitors/ didn't look for name
+        convo1_2.AddNewDialogue(playerName, "", true, false, false, false);//23
+        convo1_2.AddNewDialogue(nurseLotte, "Oké dan.", false, true, false, false);//24
+        convo1_2.AddNewDialogue(playerName, "Ik heb geprobeerd om met de bezoekers te praten, maar ze begrijpen en spreken geen Nederlands.", false, false, false, false);//25
+        convo1_2.AddNewDialogue(playerName, "", true, false, false, false);//26
+        convo1_2.AddNewDialogue(nurseLotte, "Oké dan.", false, true, false, false);//27
+        convo1_2.AddNewDialogue(playerName, "Ik heb de naam van de patiënt opgezocht, het is…", false, false, false, false);//28
+        convo1_2.AddNewDialogue(playerName, "", true, false, false, false);//29
+        convo1_2.AddNewDialogue(nurseLotte, "Oh, ze kunnen naar de wachtruimte gaan. Dat is naar de receptie!", false, false, false, false);//30
+        convo1_2.AddNewDialogue(nurseLotte, "Veel succes!", false, true, false, false);//31
+        convo1_2.AddNewDialogue(playerName, "", true, false, false, false);//32
+        convo1_2.AddNewDialogue(nurseLotte, "Veel succes!", false, false, false, false);//33
+        convo1_2.AddNewDialogue(playerName, "", true, false, false, false);//34
+        convo1_2.AddNewDialogue(nurseLotte, "Haha, ik spreek net zoveel Turks als jij. Ik denk dat je dit zelf wel op kunt lossen!", false, false, false, false);//35
+        convo1_2.AddNewDialogue(nurseLotte, "Veel succes!", false, false, false, false);//36
+        convo1_2.AddNewDialogue(playerName, "De patiënt die op de noodknop heeft gedrukt, voelt zich onwel omdat zijn kamerbuurman veel bezoekers heeft en het erg luid is in de kamer.", false, false, false, false);//37
+        convo1_2.AddNewDialogue(nurseLotte, "Dat is echt een moeilijke situatie. Kent u de naam van de patiënt bij de bezoekers?", false, false, false, false);//38
+        //Need to set the start sentence
+        convo1_2.StartSetUp();
+        //Set Emotions
+        convo1_2.SetDialogueEmotion(0, emotion.WORRIED);
+        convo1_2.SetDialogueEmotion(13, emotion.THINKING);
+        //Adding options
+        convo1_2.AddOption(2, "Advies vragen");
+        convo1_2.AddOption(2, "Ik ga terug aan de slag.");
+        convo1_2.AddOption(13, "Azra Demir");
+        convo1_2.AddOption(13, "Zehra Yavuz");
+        convo1_2.AddOption(13, "Betül Yildiz");
+        convo1_2.AddOption(13, "Eylül Yilmaz");
+        convo1_2.AddOption(19, "Hoe kan ik de naam van de contactpersoon vinden?");
+        convo1_2.AddOption(19, "Kun jij met de bezoekers gaan praten?");
+        convo1_2.AddOption(19, "Dank je wel, ik ga kijken om wat ik kan doen.");
+        convo1_2.AddOption(19, "Mag ik je nog een keer iets vragen...");
+        convo1_2.AddOption(23, "Advies vragen");
+        convo1_2.AddOption(23, "Laat maar, ik zie wat ik doe.");
+        convo1_2.AddOption(26, "Advies vragen");
+        convo1_2.AddOption(26, "Laat maar, ik doe het zelf wel.");
+        convo1_2.AddOption(29, "Waar kunnen de bezoekers een drankje halen?");
+        convo1_2.AddOption(29, "Kun jij met de bezoekers gaan praten?");
+        convo1_2.AddOption(29, "Dank je wel, ik ga kijken om wat ik kan doen.");
+        convo1_2.AddOption(29, "Mag ik je nog een keer iets vragen...");
+        convo1_2.AddOption(32, "Waar kunnen de bezoekers een drankje halen?");//0
+        convo1_2.AddOption(32, "Kun jij met de bezoekers gaan praten?");//1
+        convo1_2.AddOption(32, "Dank je wel, ik ga kijken om wat ik kan doen.");//2
+        convo1_2.AddOption(34, "Hoe kan ik de naam van de contactpersoon vinden?");
+        convo1_2.AddOption(34, "Kun jij met de bezoekers gaan praten?");
+        convo1_2.AddOption(34, "Dank je wel, ik ga kijken om wat ik kan doen.");
+        //End conversation option
+        convo1_2.SetOptionForConvoOver(2, 1, true);
+        convo1_2.SetOptionForConvoOver(19, 2, true);
+        convo1_2.SetOptionForConvoOver(23, 1, true);
+        convo1_2.SetOptionForConvoOver(26, 1, true);
+        convo1_2.SetOptionForConvoOver(29, 2, true);
+        convo1_2.SetOptionForConvoOver(32, 2, true);
+        convo1_2.SetOptionForConvoOver(34, 2, true);
+        //Adding option nextId
+        convo1_2.SetNextIdInOption(2, 0, 4);
+        convo1_2.SetNextIdInOption(2, 1, 3);
+        convo1_2.SetNextIdInOption(13, 0, 14);
+        convo1_2.SetNextIdInOption(13, 1, 14);
+        convo1_2.SetNextIdInOption(13, 2, 16);
+        convo1_2.SetNextIdInOption(13, 3, 14);
+        convo1_2.SetNextIdInOption(19, 0, 20);
+        convo1_2.SetNextIdInOption(19, 1, 35);
+        convo1_2.SetNextIdInOption(19, 2, 22);
+        convo1_2.SetNextIdInOption(19, 3, 34);
+        convo1_2.SetNextIdInOption(23, 0, 25);
+        convo1_2.SetNextIdInOption(23, 1, 24);
+        convo1_2.SetNextIdInOption(26, 0, 37);
+        convo1_2.SetNextIdInOption(26, 1, 27);
+        convo1_2.SetNextIdInOption(29, 0, 30);//0
+        convo1_2.SetNextIdInOption(29, 1, 21);//1
+        convo1_2.SetNextIdInOption(29, 2, 31);//2
+        convo1_2.SetNextIdInOption(29, 3, 32);//3
+        convo1_2.SetNextIdInOption(32, 0, 30);//0
+        convo1_2.SetNextIdInOption(32, 1, 21);//1
+        convo1_2.SetNextIdInOption(32, 2, 31);//2
+        convo1_2.SetNextIdInOption(34, 0, 20);
+        convo1_2.SetNextIdInOption(34, 1, 21);
+        convo1_2.SetNextIdInOption(34, 2, 22);
+        //Set nextDialogueId
+        convo1_2.SetDialogueNextId(3, 0);
+        convo1_2.SetDialogueNextId(6, 0);
+        convo1_2.SetDialogueNextId(11, 0);
+        convo1_2.SetDialogueNextId(15, 13);
+        //convo1_2.SetDialogueNextId(18, 29);
+        convo1_2.SetDialogueNextId(20, 19);
+        convo1_2.SetDialogueNextId(21, 36);
+        convo1_2.SetDialogueNextId(22, 19);
+        convo1_2.SetDialogueNextId(24, 23);
+        convo1_2.SetDialogueNextId(25, 8);
+        convo1_2.SetDialogueNextId(27, 26);
+        convo1_2.SetDialogueNextId(28, 13);
+        convo1_2.SetDialogueNextId(30, 29);
+        convo1_2.SetDialogueNextId(31, 29);
+        convo1_2.SetDialogueNextId(33, 19);
+        convo1_2.SetDialogueNextId(35, 19);
+        convo1_2.SetDialogueNextId(36, 29);
+        convo1_2.SetDialogueNextId(38, 28);
+        //Set Hidden options
+        convo1_2.SetOptionToHidden(32, 0, true);
+        convo1_2.SetOptionToHidden(32, 1, true);
+        convo1_2.SetOptionToHidden(34, 0, true);
+        convo1_2.SetOptionToHidden(34, 1, true);
+
+        //Translation needed =========================================================================
+        //Adding dialogue (name,sentence, option, end, used, hidden)
+        convo1_3.AddNewDialogue(playerName, "", true, false, false, false);//0
+        convo1_3.AddNewDialogue(nurseLotte, "Alright then.", false, true, false, false);//1
+        convo1_3.AddNewDialogue(playerName, "Hey Lotte, het lukte me om met de contactpersoon te praten.", false, false, false, false);//2
+        convo1_3.AddNewDialogue(nurseLotte, "Peter vertelde me al dat je de situatie hebt opgelost!", false, false, false, false);//3
+        convo1_3.AddNewDialogue(nurseLotte, "Het lijkt erop dat je een erg leuke manier hebt gevonden om de situatie op te lossen.", false, false, false, false);//4
+        convo1_3.AddNewDialogue(nurseLotte, "Iedereen moest een paar compromissen sluiten, maar uiteindelijk is iedereen blij met de situatie.", false, false, false, false);//5
+        convo1_3.AddNewDialogue(nurseLotte, "Ik ben erg trots op jou!", false, true, false, false);//6
+        convo1_3.AddNewDialogue(nurseLotte, "Maar het lijkt erop dat niet iedereen nu tevreden is met de situatie.", false, false, false, false);//7
+        convo1_3.AddNewDialogue(nurseLotte, "Alle bezoekers zijn gehaast vertrokken en Betül lijkt erg teleurgesteld te zijn.", false, false, false, false);//8
+        convo1_3.AddNewDialogue(nurseLotte, "Misschien kunt u de volgende keer proberen om meer begrip te krijgen voor ieders situatie?", false, false, false, false);//9
+        convo1_3.AddNewDialogue(nurseLotte, "Maar hoe dan ook, ik ben erg trots dat je de situatie hebt kunnen aanpakken!", false, true, false, false);//10
+        //Need to set the start sentence
+        convo1_3.StartSetUp();
+        //Set Emotions
+        convo1_3.SetDialogueEmotion(6, emotion.HAPPY);
+        convo1_3.SetDialogueEmotion(8, emotion.SAD);
+        convo1_3.SetDialogueEmotion(8, emotion.WORRIED);
+        convo1_3.SetDialogueEmotion(10, emotion.HAPPY);
+        //Adding options
+        convo1_3.AddOption(0, "[Hiermee eindigt het hoofdstuk]");//0
+        convo1_3.AddOption(0, "Geef me een minuut.");//1
+        //Adding option nextId
+        convo1_3.SetNextIdInOption(0, 0, 2);
+        convo1_3.SetNextIdInOption(0, 1, 1);
+        //End conversation option
+        convo1_3.SetOptionForConvoOver(0, 1, true);
+        //Adding dialogue nextId 
+        convo1_3.SetDialogueNextId(1, 0);
+        //============================================================================================
+
+        //Adding dialogue (name,sentence, option, end, used, hidden)
+        convo2.AddNewDialogue(playerName, "", true, false, false, false);//0
+        convo2.AddNewDialogue(patientAPeter, "Ja, dat heb ik gedaan. Bedankt dat je zo snel bent gekomen. Hoor je dat lawaai?", false, false, false, false);//1
+        convo2.AddNewDialogue(playerName, "Kun je al dit lawaai horen?", true, false, false, false);//2
+        convo2.AddNewDialogue(patientAPeter, "Oh, het is hier zo lawaaierig. Jij hoort het ook, toch?", false, false, false, false);//3
+        convo2.AddNewDialogue(patientAPeter, "De patiënt hiernaast heeft sinds een paar uur best veel bezoekers.", false, false, false, false);//4
+        convo2.AddNewDialogue(patientAPeter, "Ik heb ze gevraagd om wat stiller te zijn, maar het lijkt wel alsof ze mij gewoon negeren.", false, false, false, false);//5
+        convo2.AddNewDialogue(patientAPeter, "Kun je alsjeblieft met ze praten? Ik wil gewoon rusten en van veel mensen word ik erg onwel.", false, false, false, false);//6
+        convo2.AddNewDialogue(playerName, "Kun je alsjeblieft met ze praten?", true, false, false, false);//7
+        convo2.AddNewDialogue(patientAPeter, "Echt waar? Misschien moet je het volume een beetje hoger zetten!", false, false, false, false);//8
+        convo2.AddNewDialogue(patientAPeter, "Hoe dan ook, de patiënt hiernaast heeft sinds een paar uur best veel bezoekers.", false, false, false, false);//9
+        convo2.AddNewDialogue(patientAPeter, "Ik heb ze gevraagd om wat stiller te zijn, maar het lijkt wel alsof ze mij gewoon negeren.", false, false, false, false);//10
+        convo2.AddNewDialogue(patientAPeter, "Kun je alsjeblieft met ze praten? Ik wil gewoon rusten en van veel mensen word ik erg onwel.", false, false, false, false);//11
+        convo2.AddNewDialogue(patientAPeter, "Ja, deze mevrouw die aan de linker kant van de kamer ligt.", false, false, false, false);//12
+        convo2.AddNewDialogue(patientAPeter, "Je moet misschien even kijken wat daar aan de hand is.", false, false, false, false);//13
+        convo2.AddNewDialogue(patientAPeter, "Ja, maar ik weet niet zeker of ze me hebben begrepen. Ze glimlachten en zeiden verder niks.", false, false, false, false);//14
+        convo2.AddNewDialogue(patientAPeter, "Dankjewel.", false, true, false, false);//15
+        convo2.AddNewDialogue(playerName, "", true, false, false, false);//16
+        //Need to set the start sentence 
+        convo2.StartSetUp();
+        //Set Emotions
+        convo2.SetDialogueEmotion(0, emotion.WORRIED);
+        convo2.SetDialogueEmotion(3, emotion.SAD);
+        convo2.SetDialogueEmotion(8, emotion.MAD);
+        convo2.SetDialogueEmotion(10, emotion.SAD);
+        convo2.SetDialogueEmotion(11, emotion.SAD);
+        convo2.SetDialogueEmotion(14, emotion.CONFUSSED);
+        convo2.SetDialogueEmotion(15, emotion.HAPPY);
+        //Adding options 
+        convo2.AddOption(0, "Heeft u om hulp gevraagd?");
+        convo2.AddOption(0, "Hoe kan ik je helpen?");
+        convo2.AddOption(2, "Ja, dat heb ik direct gemerkt.");
+        convo2.AddOption(2, "Nu dat u het zegt.. Ik hoor het.");
+        convo2.AddOption(2, "Nee, ik hoor niks.");
+        convo2.AddOption(7, "Uw mede-patiënt?");
+        convo2.AddOption(7, "Heeft u al geprobeerd om met hen te praten?");
+        convo2.AddOption(7, "Ja natuurlijk. Ik ga kijken wat ik kan doen.");
+        convo2.AddOption(7, "Sorry, mag ik je nogmaals iets vragen?");
+        convo2.AddOption(16, "Uw mede-patiënt?");
+        convo2.AddOption(16, "Heeft u al geprobeerd om met hen te praten?");
+        convo2.AddOption(16, "Ja natuurlijk. Ik ga kijken wat ik kan doen.");
+        //Adding option nextId
+        convo2.SetNextIdInOption(0, 0, 1);
+        convo2.SetNextIdInOption(0, 1, 3);
+        convo2.SetNextIdInOption(2, 0, 4);
+        convo2.SetNextIdInOption(2, 1, 4);
+        convo2.SetNextIdInOption(2, 2, 8);
+        convo2.SetNextIdInOption(7, 0, 12);
+        convo2.SetNextIdInOption(7, 1, 14);
+        convo2.SetNextIdInOption(7, 2, 15);
+        convo2.SetNextIdInOption(7, 3, 2);
+        convo2.SetNextIdInOption(16, 0, 12);
+        convo2.SetNextIdInOption(16, 1, 14);
+        convo2.SetNextIdInOption(16, 2, 15);
+        //End conversation option
+        convo2.SetOptionForConvoOver(7, 2, true);
+        convo2.SetOptionForConvoOver(16, 2, true);
+        //Adding dialogue nextId 
+        convo2.SetDialogueNextId(3, 2);
+        convo2.SetDialogueNextId(11, 7);
+        convo2.SetDialogueNextId(13, 7);
+        convo2.SetDialogueNextId(14, 7);
+        convo2.SetDialogueNextId(15, 7);
+        //Set Hidden options
+        convo2.SetOptionToHidden(16, 0, true);
+        convo2.SetOptionToHidden(16, 1, true);
+
+        //Need Translation ===============================================================================================================================================
+        //Adding dialogue (name,sentence, option, end, used, hidden)
+        convo2_1.AddNewDialogue(playerName, "Halo Peter, hoe gaat het?", false, false, false, false);//0
+        convo2_1.AddNewDialogue(patientAPeter, "Ik ben veel beter, heel erg bedankt.", false, false, false, false);//1
+        convo2_1.AddNewDialogue(patientAPeter, "De bezoekers van mijn buurman gingen allemaal weg, maar ze zagen er niet blij uit.", false, false, false, false);//2
+        convo2_1.AddNewDialogue(patientAPeter, "Ze zijn weggegaan vanwege mij, nietwaar?", false, false, false, false);//3
+        convo2_1.AddNewDialogue(patientAPeter, "Dat maakt me verdrietig, ik wilde hun familiereünie niet verpesten.", false, false, false, false);//4
+        convo2_1.AddNewDialogue(patientAPeter, "Maar toch bedankt dat je voor me hebt gezorgd.", false, true, false, false);//5
+        convo2_1.AddNewDialogue(patientAPeter, "De bezoekers zijn er nog, maar zijn nu een stuk rustiger.", false, false, false, false);//6
+        convo2_1.AddNewDialogue(patientAPeter, "De aardige jongeman bood zelfs zijn excuses aan.", false, false, false, false);//7
+        convo2_1.AddNewDialogue(patientAPeter, "Hij legde uit dat het voor hen normaal is om veel bezoekers tegelijk te hebben.", false, false, false, false);//8
+        convo2_1.AddNewDialogue(patientAPeter, "Dus heel erg bedankt voor het praten met hen!", false, true, false, false);//9
+        convo2_1.AddNewDialogue(patientAPeter, "Ik kan nog steeds niet begrijpen waarom ze dachten dat het oké is om in een ziekenhuis zo'n commotie te veroorzaken.", false, false, false, false);//10
+        convo2_1.AddNewDialogue(patientAPeter, "Maar het is nu een stuk beter, dus heel erg bedankt dat je me hebt geholpen!", false, true, false, false);//11
+        convo2_1.AddNewDialogue(patientAPeter, "Het is nu zoveel rustiger sinds veel bezoekers vertrokken.", false, false, false, false);//12
+        //Need to set the start sentence 
+        convo2_1.StartSetUp();
+        //Set Emotions
+        convo2_1.SetDialogueEmotion(4, emotion.SAD);
+        convo2_1.SetDialogueEmotion(4, emotion.HAPPY);
+        convo2_1.SetDialogueEmotion(9, emotion.HAPPY);
+        convo2_1.SetDialogueEmotion(10, emotion.WORRIED);
+        convo2_1.SetDialogueEmotion(11, emotion.HAPPY);
+        //Adding dialogue nextId 
+        convo2_1.SetDialogueNextId(12, 7);
+        //===================================================================================================================================================================
+
+        //Adding dialogue (name,sentence, option, end, used, hidden)
+        convo3.AddNewDialogue(playerName, "Pardon.", false, false, false, false);//0
+        convo3.AddNewDialogue(patientB, "Affedersiniz, ingilizce bilmiyorum. Lütfen kocamla konuş", false, true, false, false);//1
+        //Need to set the start sentence
+        convo3.StartSetUp();
+        //Adding dialogue nextId 
+        convo3.SetDialogueNextId(1, 0);
+
+        convo3_1.AddNewDialogue(playerName, "Pardon, ik ben op zoek naar…", false, false, false, false);//0
+        convo3_1.AddNewDialogue(playerName, "", true, false, false, false);//1
+        convo3_1.AddNewDialogue(patientB, "Oh, Yusuf! Hij drinkt.", false, true, false, false);//2
+        convo3_1.AddNewDialogue(patientB, "Üzgünüm anlamadim", false, false, false, false);//3
+        convo3_1.AddNewDialogue(patientB, "", true, false, false, false);//4
+        convo3_1.AddNewDialogue(playerName, "Excuseer me even", false, true, false, false);//5
+        //Need to set the start sentence
+        convo3_1.StartSetUp();
+        //Set Emotions
+        convo3_1.SetDialogueEmotion(1, emotion.THINKING);
+        //Adding options 
+        convo3_1.AddOption(1, "Elif Demir");
+        convo3_1.AddOption(1, "Sandra van der Horst");
+        convo3_1.AddOption(1, "Marten Pastor");
+        convo3_1.AddOption(1, "Yusuf Yildiz");
+        convo3_1.AddOption(1, "Vincent van der Heijden");
+        convo3_1.AddOption(1, "Jana Doe");
+        convo3_1.AddOption(4, "Blijf vragen");
+        convo3_1.AddOption(4, "Verlaat gesprek");
+        //Adding option nextId
+        convo3_1.SetNextIdInOption(1, 0, 3);
+        convo3_1.SetNextIdInOption(1, 1, 3);
+        convo3_1.SetNextIdInOption(1, 2, 3);
+        convo3_1.SetNextIdInOption(1, 3, 2);
+        convo3_1.SetNextIdInOption(1, 4, 3);
+        convo3_1.SetNextIdInOption(1, 5, 3);
+        convo3_1.SetNextIdInOption(4, 0, 1);
+        convo3_1.SetNextIdInOption(4, 1, 5);
+        //End conversation option
+        convo3_1.SetOptionForConvoOver(4, 1, true);
+        //Adding dialogue nextId 
+        convo3_1.SetDialogueNextId(2, 2);
+        convo3_1.SetDialogueNextId(5, 0);
+        //Set Hidden options
+        convo3_1.SetOptionToHidden(1, 0, true);
+        convo3_1.SetOptionToHidden(1, 1, true);
+        convo3_1.SetOptionToHidden(1, 2, true);
+        convo3_1.SetOptionToHidden(1, 3, true);
+        convo3_1.SetOptionToHidden(1, 4, true);
+        convo3_1.SetOptionToHidden(1, 5, true);
+
+        //Adding dialogue (name,sentence, option, end, used, hidden)
+        convo4.AddNewDialogue(playerName, "Hallo kan ik even met je praten?", false, false, false, false);//0
+        convo4.AddNewDialogue(patientBBrother, "Merhaba tanıştığımıza memnun oldum!", false, true, false, false);//1
+        //Need to set the start sentence
+        convo4.StartSetUp();
+        //Adding dialogue nextId 
+        convo4.SetDialogueNextId(1, 0);
+
+        //Adding dialogue (name,sentence, option, end, used, hidden)
+        convo5.AddNewDialogue(playerName, "Pardon, zou ik even met u kunnen praten?", false, false, false, false);//0
+        convo5.AddNewDialogue(patientBMother, "Merhaba merhaba, umarım harika bir gün geçiriyorsundur", false, true, false, false);//1
+        //Need to set the start sentence
+        convo5.StartSetUp();
+        //Adding dialogue nextId 
+        convo5.SetDialogueNextId(1, 0);
+
+        //Adding dialogue (name,sentence, option, end, used, hidden)
+        convo6.AddNewDialogue(playerName, "Hallo, kan ik even met je praten?", false, false, false, false);//0
+        convo6.AddNewDialogue(patientBSister, "Üzgünüm İngilizce bilmiyorum.Ama burada harika bir iş çıkarıyorsun, kardeşime baktığın için çok teşekkür ederim!", false, true, false, false);//1
+        //Need to set the start sentence
+        convo6.StartSetUp();
+        //Adding dialogue nextId 
+        convo6.SetDialogueNextId(1, 0);
+
+        //Translate ===============================================================================================================================================================================
+        //Adding dialogue (name,sentence, option, end, used, hidden)
+        convo7.AddNewDialogue(playerName, "Pardon, bent u Yusuf Yildiz?", false, false, false, false);//0
+        convo7.AddNewDialogue(patientBHusband, "Ja dat ben ik. Is er iets met mijn vrouw gebeurd?", false, false, false, false);//1
+        convo7.AddNewDialogue(playerName, "Oh nee, maak je geen zorgen.", false, false, false, false);//2
+        convo7.AddNewDialogue(playerName, "", true, false, false, false);//3
+        convo7.AddNewDialogue(patientBHusband, "Ja, iedereen wilde meteen zijn steun betuigen toen ze hoorden dat Betül in het ziekenhuis ligt.", false, false, false, false);//4
+        convo7.AddNewDialogue(patientBHusband, "Ik denk dat ze best blij is met de afleiding.", false, false, false, false);//5
+        convo7.AddNewDialogue(playerName, "", true, false, false, false);//6
+        convo7.AddNewDialogue(patientBHusband, "Ja, ik denk dat Betül zich al veel beter voelt!", false, false, false, false);//7
+        convo7.AddNewDialogue(patientBHusband, "Ik ben ook blij dat haar familie haar vandaag heeft kunnen bezoeken.", false, false, false, false);//8
+        convo7.AddNewDialogue(patientBHusband, "Oh, wat is het probleem?", false, false, false, false);//9
+        convo7.AddNewDialogue(playerName, "", true, false, false, false);//10
+        convo7.AddNewDialogue(patientBHusband, "Oké", false, true, false, false);//11
+        convo7.AddNewDialogue(patientBHusband, "Tot nu toe heeft niemand ons erover verteld.", false, false, false, false);//12
+        convo7.AddNewDialogue(patientBHusband, "Ik zal met mijn familie praten, maar ik denk niet dat we hier eerlijk worden behandeld.", false, true, false, false);//13
+        convo7.AddNewDialogue(patientBHusband, "Oh, het spijt me heel erg om dat te horen. Is er iets dat we kunnen doen?", false, false, false, false);//14
+        convo7.AddNewDialogue(playerName, "... de buurvrouw van je vrouw voelt zich erg onwel door al het lawaai.", false, false, false, false);//15
+        convo7.AddNewDialogue(patientBHusband, "Oh, het spijt me heel erg om dat te horen, ik wist het niet. Is er iets dat we kunnen doen?", false, false, false, false);//16
+        convo7.AddNewDialogue(playerName, "Wat kunnen we doen?", true, false, false, false);//17
+        convo7.AddNewDialogue(playerName, "De bezoekers leiden ook de buurman van je vrouw af, Peter.", false, false, false, false);//18
+        convo7.AddNewDialogue(patientBHusband, "Waarom wat is het probleem?", false, false, false, false);//19
+        convo7.AddNewDialogue(playerName, "Wat is het probleem?", true, false, false, false);//20
+        convo7.AddNewDialogue(patientBHusband, "Tot nu toe heeft niemand ons hierover verteld.", false, false, false, false);//21
+        convo7.AddNewDialogue(patientBHusband, "Ik zal er met mijn familie over praten, maar ik denk niet dat we eerlijk worden behandeld.", false, true, false, false);//22
+        convo7.AddNewDialogue(patientBHusband, "Oh, dat spijt me heel erg. Is er iets dat we kunnen doen?", false, false, false, false);//23
+        convo7.AddNewDialogue(patientBHusband, "Ik wist niet dat er een limiet is aan bezoekers", false, false, false, false);//24
+        convo7.AddNewDialogue(playerName, "De andere bezoekers kunnen altijd hier of in de cafetaria wachten.", false, false, false, false);//25
+        convo7.AddNewDialogue(patientBHusband, "Ja, natuurlijk zal ik met mijn familie praten. Is er nog iets anders?", false, false, false, false);//26
+        convo7.AddNewDialogue(patientBHusband, "Hm, dat is een beetje veeleisend. Maar ik zal zien wat ik kan doen. Is er nog iets anders?", false, false, false, false);//27
+        convo7.AddNewDialogue(patientBHusband, "Dank je voor me te laten weten!", false, false, false, false);//28
+        convo7.AddNewDialogue(patientBHusband, "Voor ons is het normaal en geruststellend om veel familie en vrienden te hebben, dus dat deed ik niet overweeg de andere patiënt.", false, false, false, false);//29
+        convo7.AddNewDialogue(patientBHusband, "Maar ik zal er met mijn familie over praten!", false, true, false, false);//30
+        //Need to set the start sentence
+        convo7.StartSetUp();
+        //Set Emotions
+        convo7.SetDialogueEmotion(4, emotion.HAPPY);
+        convo7.SetDialogueEmotion(9, emotion.WORRIED);
+        convo7.SetDialogueEmotion(12, emotion.MAD);
+        convo7.SetDialogueEmotion(13, emotion.MAD);
+        convo7.SetDialogueEmotion(16, emotion.WORRIED);
+        convo7.SetDialogueEmotion(19, emotion.WORRIED);
+        convo7.SetDialogueEmotion(21, emotion.MAD);
+        convo7.SetDialogueEmotion(22, emotion.MAD);
+        convo7.SetDialogueEmotion(28, emotion.HAPPY);
+        //Adding options 
+        convo7.AddOption(3, "Ik heb gemerkt dat uw vrouw veel bezoekers heeft.");//0
+        convo7.AddOption(3, "De buurvrouw van je vrouw heeft me gevraagd met je te praten.");//1
+        convo7.AddOption(3, "Geniet je van het bezoek?");//2
+        convo7.AddOption(3, "Ik kom later op je terug.");//3
+        convo7.AddOption(6, "Dat is fijn om te horen! Echter…");//0
+        convo7.AddOption(6, "Om eerlijk te zijn, zou het misschien beter zijn als de bezoekers zouden vertrekken.");//1
+        convo7.AddOption(6, "Helaas leiden de bezoekers haar niet alleen af ​​...");//2
+        convo7.AddOption(6, "Er is een klacht ingediend over het geluid.");//3
+        convo7.AddOption(10, "Je familie is te luidruchtig en het geeft hem een ​​ongemakkelijk gevoel.");//0
+        convo7.AddOption(10, "Hij voelt zich niet lekker en kan niet rusten als er zoveel mensen om hem heen zijn.");//1
+        convo7.AddOption(10, "Er zijn te veel bezoekers in de kamer.");//2
+        convo7.AddOption(10, "Hij voelt zich niet lekker en het geluid maakt de zaken erger.");//3
+        convo7.AddOption(17, "Het zou geweldig zijn als u het aantal mensen dat tegelijk op bezoek komt, zou kunnen verminderen.");//0
+        convo7.AddOption(17, "Ik denk dat Peter blij zou zijn met een verontschuldiging.");//1
+        convo7.AddOption(17, "Misschien zou je kunnen proberen wat rustiger te zijn?");//2
+        convo7.AddOption(17, "Dat zou genoeg moeten zijn.");//3
+        convo7.AddOption(20, "Uw gezin is te luidruchtig en het stoort de andere patiënt.");//0
+        convo7.AddOption(20, "De buurvrouw van je vrouw voelt zich niet lekker.");//1
+        convo7.AddOption(20, "De buurvrouw van je vrouw voelt zich gestoord door de commotie.");//2
+        convo7.AddOption(20, "Er zijn te veel bezoekers tegelijk.");//3
+        //End conversation option
+        convo7.SetOptionForConvoOver(3, 3, true);
+        convo7.SetOptionForConvoOver(17, 3, true);
+        //Adding option nextId
+        convo7.SetNextIdInOption(3, 0, 4);//0
+        convo7.SetNextIdInOption(3, 1, 7);//1
+        convo7.SetNextIdInOption(3, 2, 9);//2
+        convo7.SetNextIdInOption(3, 3, 11);//3
+        convo7.SetNextIdInOption(6, 0, 15);//0
+        convo7.SetNextIdInOption(6, 1, 19);//1
+        convo7.SetNextIdInOption(6, 2, 18);//2
+        convo7.SetNextIdInOption(6, 3, 19);//3
+        convo7.SetNextIdInOption(10, 0, 12);//0
+        convo7.SetNextIdInOption(10, 1, 14);//1
+        convo7.SetNextIdInOption(10, 2, 12);//2
+        convo7.SetNextIdInOption(10, 3, 14);//3
+        convo7.SetNextIdInOption(17, 0, 25);//0
+        convo7.SetNextIdInOption(17, 1, 27);//1
+        convo7.SetNextIdInOption(17, 2, 26);//2
+        convo7.SetNextIdInOption(17, 3, 28);//3
+        convo7.SetNextIdInOption(20, 0, 21);//0
+        convo7.SetNextIdInOption(20, 1, 23);//1
+        convo7.SetNextIdInOption(20, 2, 21);//2
+        convo7.SetNextIdInOption(20, 3, 24);//3
+        //Adding dialogue nextId 
+        convo7.SetDialogueNextId(8, 5);
+        convo7.SetDialogueNextId(11, 3);
+        convo7.SetDialogueNextId(14, 17);
+        convo7.SetDialogueNextId(18, 16);
+        convo7.SetDialogueNextId(23, 17);
+        convo7.SetDialogueNextId(24, 22);
+        convo7.SetDialogueNextId(26, 17);
+        convo7.SetDialogueNextId(27, 17);
+        //Set Hidden options
+        convo7.SetOptionToHidden(17, 3, true);
+        //=========================================================================================================================================================================================
+
+        // This communication is used when there are no more conversations left
+        //Adding dialogue to convoDefault
+        convoDefault.AddNewDialogue(playerName, "Ik ga even iets anders doen", false, true, false, false);
+        //Need to set the start sentence convoDefault
+        convoDefault.StartSetUp();
+
+        //A list of communication for this chapter
+        List<Conversation> chapterDataList = new List<Conversation>();
+
+        //Adding communications to the chaper
+        chapterDataList.Add(convo1);//0
+        chapterDataList.Add(convo1_1);//1
+        chapterDataList.Add(convo1_2);//2
+        chapterDataList.Add(convo1_3);//3
+        chapterDataList.Add(convo2);//4
+        chapterDataList.Add(convo2_1);//5
+        chapterDataList.Add(convo3);//6
+        chapterDataList.Add(convo3_1);//7
+        chapterDataList.Add(convo4);//8
+        chapterDataList.Add(convo5);//9
+        chapterDataList.Add(convo6);//10
+        chapterDataList.Add(convo7);//11
+        chapterDataList.Add(convoDefault);//12
+
+        ////Create a ChapterConversation
+        Chapter chapter = new Chapter(chapterDataList,1);
+
+        return chapter;
+    }
+}
