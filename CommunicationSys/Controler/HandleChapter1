@@ -1,0 +1,386 @@
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+
+public class HandleChapter1 : MonoBehaviour
+{
+    public GameObject manager;
+    public GameObject endScreen;
+    private bool alreadyCheckedLotteInNursingRoom;
+    private bool alreadyAskedPaientBForContactPerson;
+    private bool alreadyWaitingRoomAsked;
+    private bool alreadySolvedTask;
+
+    private bool lotteInNurseRoom;
+    private bool checkPatientName;
+    private bool playerTalkedToPatients;
+    private bool playerAskForContactPerson;
+    private bool playerNeedsWaitingRoomLocation;
+    [ReadOnly]
+    public bool peterEndTalk;
+    private bool peterExplainedIssue;
+    private bool solvedTask;
+    private bool politePath;
+    private bool visitorsLeave;
+    private bool fewVisitorsLeft;
+    private bool apologyToPeter;
+    [ReadOnly]
+    public bool canTalkToContactPerson;
+    public bool needEndScreen;
+    private Chapter chapter;
+    private Conversation currentConvo;
+    public void Start()
+    {
+        alreadyCheckedLotteInNursingRoom = false;
+        alreadyAskedPaientBForContactPerson = false;
+        alreadyWaitingRoomAsked = false;
+        alreadySolvedTask = false;
+        needEndScreen = false;
+
+        lotteInNurseRoom = false;
+        checkPatientName = false;
+        peterExplainedIssue = false;
+        peterEndTalk = false;
+        solvedTask = false;
+        politePath = false;
+        visitorsLeave = false;
+        fewVisitorsLeft = false;
+        apologyToPeter = false;
+        playerTalkedToPatients = false;
+        playerAskForContactPerson = false;
+        playerNeedsWaitingRoomLocation = false;
+    }
+
+    public void HandleChapterHiddenOption(int btnOption, Dialogue dialogue){
+        if (manager != null)
+        {
+            if (chapter.GetConvoIndex(currentConvo) == 1)
+            {
+                if (btnOption == 0 && dialogue.id == 0)
+                {
+                    currentConvo.SetOptionToHidden(0, 0, true);
+                    currentConvo.SetOptionToHidden(5, 0, false);
+                }
+                if (btnOption == 1 && dialogue.id == 0)
+                {
+                    currentConvo.SetOptionToHidden(0, 1, true);
+                    currentConvo.SetOptionToHidden(5, 1, false);
+                }
+            }
+            else if (chapter.GetConvoIndex(currentConvo) == 2)
+            {
+                if (btnOption == 0 && dialogue.id == 29)
+                {
+                    currentConvo.SetOptionToHidden(29, 0, true);
+                    currentConvo.SetOptionToHidden(32, 0, false);
+                }
+                if (btnOption == 1 && dialogue.id == 29)
+                {
+                    currentConvo.SetOptionToHidden(29, 1, true);
+                    currentConvo.SetOptionToHidden(32, 1, false);
+                }
+                if (btnOption == 0 && dialogue.id == 19)
+                {
+                    currentConvo.SetOptionToHidden(19, 0, true);
+                    currentConvo.SetOptionToHidden(34, 0, false);
+                }
+                if (btnOption == 1 && dialogue.id == 19)
+                {
+                    currentConvo.SetOptionToHidden(19, 1, true);
+                    currentConvo.SetOptionToHidden(34, 1, false);
+                }
+            } else if (chapter.GetConvoIndex(currentConvo) == 3) {
+                if (btnOption == 0 && dialogue.id == 0) {
+                    needEndScreen = true;
+                }
+            } else if (chapter.GetConvoIndex(currentConvo) == 4) {
+                if (btnOption == 0 && dialogue.id == 7)
+                {
+                    currentConvo.SetOptionToHidden(7, 0, true);
+                    currentConvo.SetOptionToHidden(16, 0, false);
+                } 
+                if (btnOption == 1 && dialogue.id == 7) {
+                    currentConvo.SetOptionToHidden(7, 1, true);
+                    currentConvo.SetOptionToHidden(16, 1, false);
+                }
+            } else if (chapter.GetConvoIndex(currentConvo) == 7) {
+                if (btnOption == 3 && dialogue.id == 1)
+                {
+                    // This is where the boolean for talking to the contact person needs to be set as true
+                    canTalkToContactPerson = true;
+                }
+            } else if (chapter.GetConvoIndex(currentConvo) == 11) {
+                
+                if (btnOption == 0 && dialogue.id == 10)
+                {
+                    visitorsLeave = true;
+                    peterEndTalk = true;
+                }
+                if (btnOption == 2 && dialogue.id == 10)
+                {
+                    visitorsLeave = true;
+                    peterEndTalk = true;
+                }
+                if (btnOption == 0 && dialogue.id == 20)
+                {
+                    visitorsLeave = true;
+                    peterEndTalk = true;
+                }
+                if (btnOption == 2 && dialogue.id == 20)
+                {
+                    visitorsLeave = true;
+                    peterEndTalk = true;
+                }
+                if (btnOption == 0 && dialogue.id == 17)
+                {
+                    fewVisitorsLeft = true;
+                    //visitorsLeave = true;
+                    currentConvo.SetOptionToHidden(17, 3, false);
+                }
+                if (btnOption == 1 && dialogue.id == 17)
+                {
+                    apologyToPeter = true;
+                    currentConvo.SetOptionToHidden(17, 3, false);
+                }
+                if (btnOption == 2 && dialogue.id == 17)
+                {
+                    visitorsLeave = false;
+                    currentConvo.SetOptionToHidden(17, 3, false);
+                }
+                if (btnOption == 3 && dialogue.id == 17)
+                {
+                    peterEndTalk = true;
+                    politePath = true;
+                }
+            }
+        }
+    }
+
+    public bool CheckIfPeterExplainedIssue() {
+        return peterExplainedIssue;
+    }
+
+    public void PlayerCheckedPatientName() {
+        if (!checkPatientName) {
+            checkPatientName = true;
+        }
+    }
+
+    public void PlayerTalkedToPeople()
+    {
+        if (!playerTalkedToPatients) {
+            playerTalkedToPatients = true;
+        }
+    }
+    //This bool is if the player can talk to patient B
+    public void PlayerAskedForContactPerson()
+    {
+        if (!playerAskForContactPerson)
+        {
+            playerAskForContactPerson = true;
+        }
+    }
+    //This bool is if the player talks to patient B and finds out who the contact person is
+    public void AskLotteWaitingRoom()
+    {
+        if (!playerNeedsWaitingRoomLocation)
+        {
+            playerNeedsWaitingRoomLocation = true;
+        }
+    }
+
+    public void SetLotteInNursingRoom()
+    {
+        if (!lotteInNurseRoom) {
+            lotteInNurseRoom = true;
+        }
+    }
+
+    public void SetlastConvoForLotte()
+    {
+        if (!solvedTask)
+        {
+            solvedTask = true;
+        }
+    }
+
+    public void SetListOfContactPerson(List<string> nameList) {
+
+        for (int i = 0; i < nameList.Count; i++)
+        {
+            if (nameList[i].Equals("Elif Demir")) {
+                manager.GetComponent<CommunicationManager>().chapter.convoList[7].SetOptionToHidden(1, 0, false);
+            }
+            if (nameList[i].Equals("Sandra van der Horst"))
+            {
+                manager.GetComponent<CommunicationManager>().chapter.convoList[7].SetOptionToHidden(1, 1, false);
+            }
+            if (nameList[i].Equals("Marten Pastor"))
+            {
+                manager.GetComponent<CommunicationManager>().chapter.convoList[7].SetOptionToHidden(1, 2, false);
+            }
+            if (nameList[i].Equals("Yusuf Yildiz"))
+            {
+                manager.GetComponent<CommunicationManager>().chapter.convoList[7].SetOptionToHidden(1, 3, false);
+            }
+            if (nameList[i].Equals("Vincent van der Heijden"))
+            {
+                manager.GetComponent<CommunicationManager>().chapter.convoList[7].SetOptionToHidden(1, 4, false);
+            }
+            if (nameList[i].Equals("Jana Doe"))
+            {
+                manager.GetComponent<CommunicationManager>().chapter.convoList[7].SetOptionToHidden(1, 5, false);
+            }
+        }
+        AskLotteWaitingRoom();
+    }
+
+    public void IsLotteInNurseRoom() {
+        if (manager != null) {
+            if (!alreadyCheckedLotteInNursingRoom) {
+                if (lotteInNurseRoom) {
+                    manager.GetComponent<CommunicationManager>().chapter.convoList[0].isUsed = true;
+                    manager.GetComponent<CommunicationManager>().chapter.convoList[1].isUsed = true;
+                    manager.GetComponent<CommunicationManager>().currentConvo = chapter.GetConvo(2);
+                    SetComCopy();
+                    alreadyCheckedLotteInNursingRoom = true;
+                }
+            }
+        }        
+    }
+    public void SetConvoForLotte() {
+        if (manager != null)
+        {
+            if (playerNeedsWaitingRoomLocation)
+            {
+                if (!alreadyWaitingRoomAsked)
+                {
+                    currentConvo.SetDialogueNextId(1, 29);
+                    alreadyWaitingRoomAsked = true;
+                }
+            } else {
+                if (checkPatientName && playerTalkedToPatients)
+                {
+                    currentConvo.SetDialogueNextId(1, 26);
+                }
+                else if (!checkPatientName && playerTalkedToPatients)
+                {
+                    currentConvo.SetDialogueNextId(1, 23);
+                }
+                else
+                {
+                    currentConvo.SetDialogueNextId(1, 2);
+                }
+            }
+            if (solvedTask) {
+                if (!alreadySolvedTask)
+                {
+                    manager.GetComponent<CommunicationManager>().chapter.convoList[0].isUsed = true;
+                    manager.GetComponent<CommunicationManager>().chapter.convoList[1].isUsed = true;
+                    manager.GetComponent<CommunicationManager>().chapter.convoList[2].isUsed = true;
+                    manager.GetComponent<CommunicationManager>().currentConvo = chapter.GetConvo(3);
+                    SetComCopy();
+                    alreadySolvedTask = true;
+                }
+                SetConvoPath();
+            }
+        }
+    }
+    public void SetConvoPath()
+    {
+        if (politePath)
+        {
+            manager.GetComponent<CommunicationManager>().chapter.convoList[3].SetDialogueNextId(3, 4);
+        }
+        else
+        {
+            manager.GetComponent<CommunicationManager>().chapter.convoList[3].SetDialogueNextId(3, 7);
+        }
+    }
+    //Ask wife for the husband
+    public void CheckIfPlayerCheckedForContactPerson() {
+        if (manager != null) {
+            if (!alreadyAskedPaientBForContactPerson) {
+                if (playerAskForContactPerson) {
+                    manager.GetComponent<CommunicationManager>().chapter.convoList[6].isUsed = true;
+                    manager.GetComponent<CommunicationManager>().currentConvo = chapter.GetConvo(7);
+                    SetComCopy();
+                    alreadyAskedPaientBForContactPerson = true;
+                } 
+            } 
+        }
+    }
+    public void SetLastPeterTalk() {
+        if (manager != null)
+        {
+            if (peterEndTalk) {
+                manager.GetComponent<CommunicationManager>().chapter.convoList[4].isUsed = true;
+                manager.GetComponent<CommunicationManager>().currentConvo = chapter.GetConvo(5);
+                SetComCopy();
+
+                if (!politePath) {
+                    manager.GetComponent<CommunicationManager>().chapter.convoList[5].SetDialogueNextId(1,2);
+                } else if (politePath && visitorsLeave) {
+                    manager.GetComponent<CommunicationManager>().chapter.convoList[5].SetDialogueNextId(1, 12);
+                } else if (politePath && !visitorsLeave) {
+                    manager.GetComponent<CommunicationManager>().chapter.convoList[5].SetDialogueNextId(1, 6);
+                }
+
+                if (politePath && !visitorsLeave && apologyToPeter) {
+                    manager.GetComponent<CommunicationManager>().chapter.convoList[5].SetDialogueNextId(6, 7);
+                } else if (politePath && !visitorsLeave && !apologyToPeter)
+                {
+                    manager.GetComponent<CommunicationManager>().chapter.convoList[5].SetDialogueNextId(6, 10);
+                }
+
+                if (politePath && visitorsLeave && apologyToPeter)
+                {
+                    manager.GetComponent<CommunicationManager>().chapter.convoList[5].SetDialogueNextId(12, 7);
+                }
+                else if (politePath && visitorsLeave && !apologyToPeter)
+                {
+                    manager.GetComponent<CommunicationManager>().chapter.convoList[5].SetDialogueNextId(12, 10);
+                }
+            }
+        }
+    }
+    public void Chapter1Over() {
+        if (manager != null)
+        {
+            if (needEndScreen)
+            {
+                endScreen.SetActive(true);
+            }
+        }
+    }
+    public void SetChaperCopy() {
+        if (manager != null) {
+            this.chapter = manager.GetComponent<CommunicationManager>().chapter;
+        }
+        
+    }
+    public void SetComCopy() {
+        if (manager != null)
+        {
+            this.currentConvo = manager.GetComponent<CommunicationManager>().currentConvo;
+        }
+        
+    }
+
+    public bool isContactPersontalkOver() {
+        return manager.GetComponent<CommunicationManager>().chapter.convoList[11].isUsed;
+    
+    }
+    public bool isAllVisitorsGone() {
+        return visitorsLeave;
+    }
+    public bool isFewVisitorsleft() {
+        return fewVisitorsLeft;
+    }
+
+    public void PeterExplainedIssue() {
+        if (!peterExplainedIssue && currentConvo.currentId == 4) {
+            peterExplainedIssue = true;
+        }
+    }
+}
