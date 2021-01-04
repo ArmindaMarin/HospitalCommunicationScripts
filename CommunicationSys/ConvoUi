@@ -1,0 +1,30 @@
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+
+public class ConvoUI : MonoBehaviour
+{
+    public GameObject parentUI;
+    public Animator popUp;
+    public GameObject GetChildText(int textBoxIndex,int textIndex)
+    {
+        GameObject child = parentUI.transform.GetChild(textBoxIndex).gameObject;
+        GameObject grandChild = child.transform.GetChild(textIndex).gameObject;
+        return grandChild;
+    }
+
+    public void EnableFinishSymbol(){
+        GameObject child = parentUI.transform.GetChild(0).gameObject;
+        GameObject grandChild = child.transform.GetChild(1).gameObject;
+        grandChild.SetActive(true);
+    }
+    public void DisableFinishSymbol(){
+        GameObject child = parentUI.transform.GetChild(0).gameObject;
+        GameObject grandChild = child.transform.GetChild(1).gameObject;
+        grandChild.SetActive(false);
+    }
+    public GameObject GetChild() {
+        GameObject child = parentUI.transform.GetChild(0).gameObject;
+        return child;
+    }
+}
