@@ -1,0 +1,69 @@
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+using UnityEngine.UI;
+
+public class OptionBoxUI : MonoBehaviour
+{
+    public GameObject parentUI;
+
+    public GameObject GetChildText(int textIndex) {
+        GameObject child = parentUI.transform.GetChild(0).gameObject;
+        GameObject grandChild = child.transform.GetChild(0).gameObject;
+        GameObject greatGrandChild = grandChild.transform.GetChild(textIndex).gameObject;
+        return greatGrandChild;
+    }
+    public void ShowPreviousMessage(string empty) {
+        GameObject child = parentUI.transform.GetChild(0).gameObject;
+        GameObject grandChild = child.transform.GetChild(0).gameObject;
+
+        if(empty.Equals("")){
+            grandChild.SetActive(false);
+        } else {
+            grandChild.SetActive(true);
+        }
+    }
+
+    // Just give the index of the optionsList in dialogue
+    public GameObject GetChildBtn(int index) {
+        GameObject child = parentUI.transform.GetChild(0).gameObject;
+        GameObject grandChild = child.transform.GetChild(1).gameObject;
+        GameObject greatGrandChild = grandChild.transform.GetChild(index).gameObject;
+        return greatGrandChild;
+    }
+    public void SetBtnText(GameObject btn, string optionText) {
+        btn.GetComponentInChildren<Text>().text = optionText;
+    }
+    public void DisableBtn(int index) {
+        GameObject child = parentUI.transform.GetChild(0).gameObject;
+        GameObject grandChild = child.transform.GetChild(1).gameObject;
+        GameObject btn = grandChild.transform.GetChild(index).gameObject;
+        btn.SetActive(false);
+    }
+    public void EnableBtn(int index) {
+        GameObject child = parentUI.transform.GetChild(0).gameObject;
+        GameObject grandChild = child.transform.GetChild(1).gameObject;
+        GameObject btn = grandChild.transform.GetChild(index).gameObject;
+        btn.SetActive(true);
+    }
+    public void HiddenBtn(int index) {
+        GameObject child = parentUI.transform.GetChild(0).gameObject;
+        GameObject grandChild = child.transform.GetChild(1).gameObject;
+        GameObject btn = grandChild.transform.GetChild(index).gameObject;
+        btn.GetComponent<Button>().interactable = false;
+    }
+    public void ShowHiddenBtn(int index) {
+        GameObject child = parentUI.transform.GetChild(0).gameObject;
+        GameObject grandChild = child.transform.GetChild(1).gameObject;
+        GameObject btn = grandChild.transform.GetChild(index).gameObject;
+        btn.GetComponent<Button>().interactable = true;
+    }
+    public void ShowEndSymbol(bool isOver, int btnNumber)
+    {
+        GameObject child = parentUI.transform.GetChild(0).gameObject;
+        GameObject grandChild = child.transform.GetChild(1).gameObject;
+        GameObject btn = grandChild.transform.GetChild(btnNumber).gameObject;
+        GameObject exitSymbol = btn.transform.GetChild(1).gameObject;
+        exitSymbol.SetActive(isOver);
+    }
+}
