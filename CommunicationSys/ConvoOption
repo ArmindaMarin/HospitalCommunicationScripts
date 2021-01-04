@@ -1,0 +1,21 @@
+using System;
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+
+[Serializable]
+public class ConvoOption
+{
+    public string optionName;
+    public int nextID;
+    public bool hidden;
+    public bool isOverConvo;
+
+    public ConvoOption(string optionName)
+    {
+        nextID = -1;
+        hidden = false;
+        this.optionName = optionName;
+        isOverConvo = false;
+    }
+}
