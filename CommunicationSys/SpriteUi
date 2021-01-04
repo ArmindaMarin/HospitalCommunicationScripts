@@ -1,0 +1,17 @@
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+using UnityEngine.UI;
+
+public class SpriteUI : MonoBehaviour
+{
+    public GameObject sprite;
+    public void SetSprite(Sprite newSprite) {
+        sprite.GetComponent<Image>().sprite = newSprite;
+    }
+    public void SetSpriteWithShadow(Sprite shadow,Sprite newSprite){
+        sprite.GetComponent<Image>().sprite = shadow;
+        GameObject child = sprite.transform.GetChild(0).gameObject;
+        child.GetComponent<Image>().sprite = newSprite;
+    }
+}
